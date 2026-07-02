@@ -22,8 +22,8 @@ namespace mod_confprogram;
  * Covers read accessors over this plugin's own tables (phase, unvetted flags,
  * decisions, favourites) plus the write operations needed by the Review
  * phase screens (assigning reviewers/reviewer groups, upserting rubric
- * review scores, recording decisions, toggling the unvetted flag). Favourite
- * toggling is Display-phase territory and remains a follow-up task.
+ * review scores, recording decisions, toggling the unvetted flag) and the
+ * Display phase (favourite/unfavourite a submission).
  *
  * Capability contract: these methods do NOT check capabilities or context
  * themselves — they are a raw data-access layer only. Decision and reviewer
@@ -102,6 +102,61 @@ class api {
         return $DB->record_exists('confprogram_favourite', [
             'userid'       => $userid,
             'submissionid' => $submissionid,
+        ]);
+    }
+
+    /**
+     * Favourites a submission for a user. A no-op if already favourited.
+     *
+     * This is one of the two write-side methods a future mod_confscheduler is expected
+     * to call directly for its own "my timetable" toggle (per this project's
+     * direct-API-coupling, no-shared-plugin architecture), so favourites stay in sync
+     * between the two plugins' UIs. See also remove_favourite() and the read-side
+     * is_favourited()/get_favourites() above.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $userid The user id favouriting the submission
+     * @return void
+     */
+    public static function add_favourite(int $confprogramid, int $submissionid, int $userid): void {
+        global $DB;
+
+        $existing = $DB->record_exists('confprogram_favourite', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'userid'       => $userid,
+        ]);
+        if ($existing) {
+            return;
+        }
+
+        $DB->insert_record('confprogram_favourite', (object) [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'userid'       => $userid,
+            'timecreated'  => time(),
+        ]);
+    }
+
+    /**
+     * Removes a user's favourite of a submission. A no-op if not currently favourited.
+     *
+     * See add_favourite()'s docblock for the mod_confscheduler integration contract
+     * this method is also part of.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $userid The user id removing their favourite
+     * @return void
+     */
+    public static function remove_favourite(int $confprogramid, int $submissionid, int $userid): void {
+        global $DB;
+
+        $DB->delete_records('confprogram_favourite', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'userid'       => $userid,
         ]);
     }
 

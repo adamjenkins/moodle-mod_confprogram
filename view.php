@@ -17,12 +17,20 @@
 /**
  * Main view page for mod_confprogram.
  *
- * Renders the intro plus quick links into the Review phase screens this
- * user has capabilities for, and (for submitters) a link to their own
- * feedback screen for any of their submissions currently awaiting
- * resubmission. The Display phase screens (accepted-submissions listing,
- * favourites, etc.) are a follow-up task; while phase is 'display' this page
- * still only shows the placeholder notice below.
+ * In the Review phase, renders the intro plus quick links into the Review phase
+ * screens this user has capabilities for, and (for submitters) a link to their own
+ * feedback screen for any of their submissions currently awaiting resubmission.
+ *
+ * In the Display phase, renders the accepted-submissions list: title, and any other
+ * configured fields (see \mod_confprogram\local\field_settings), a favourite-star
+ * toggle, a day selector (only shown once mod_confscheduler schedule info exists for
+ * at least one accepted submission -- see \mod_confprogram\local\schedule_info), and
+ * a "favourites only" filter. Clicking a row opens the fuller field set in an
+ * AJAX-loaded modal (amd/src/programlist.js).
+ *
+ * A user holding mod/confprogram:managereviewers sees a phase-toggle control and a
+ * link to displaysettings.php while in editing mode ("Turn editing on"), regardless
+ * of the current phase.
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -32,7 +40,12 @@
 require_once('../../config.php');
 require_once($CFG->dirroot . '/mod/confprogram/lib.php');
 
+use mod_confprogram\api;
+use mod_confprogram\local\display_list;
+use mod_confprogram\local\field_formatter;
+use mod_confprogram\local\field_settings;
 use mod_confprogram\local\rounds;
+use mod_confprogram\local\schedule_info;
 use mod_confsubmissions\api as submissions_api;
 
 $id = required_param('id', PARAM_INT);
@@ -54,8 +67,55 @@ $PAGE->set_title(format_string($confprogram->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+// Phase toggle: only ever reachable in editing mode by a managereviewers holder, and
+// must run (and redirect) before any output is sent.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && optional_param('togglephase', 0, PARAM_BOOL)) {
+    require_sesskey();
+    require_capability('mod/confprogram:managereviewers', $context);
+
+    $newphase = $confprogram->phase === 'review' ? 'display' : 'review';
+    $DB->update_record('confprogram', (object) [
+        'id'           => $confprogram->id,
+        'phase'        => $newphase,
+        'timemodified' => time(),
+    ]);
+
+    redirect($pageurl);
+}
+
+$confsubmissionscm = get_coursemodule_from_id('confsubmissions', $confprogram->confsubmissionscmid, 0, false, MUST_EXIST);
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($confprogram->name), 2);
+
+if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers', $context)) {
+    $nextphase = $confprogram->phase === 'review' ? 'display' : 'review';
+
+    echo html_writer::start_tag('div', ['class' => 'confprogram-editcontrols mb-3']);
+
+    echo html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => $pageurl->out_omit_querystring(),
+        'class'  => 'form-inline d-inline',
+    ]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'togglephase', 'value' => 1]);
+    echo html_writer::empty_tag('input', [
+        'type'  => 'submit',
+        'value' => get_string('switchtophase', 'mod_confprogram', get_string('phase_' . $nextphase, 'mod_confprogram')),
+        'class' => 'btn btn-secondary btn-sm mr-2',
+    ]);
+    echo html_writer::end_tag('form');
+
+    echo html_writer::link(
+        new moodle_url('/mod/confprogram/displaysettings.php', ['id' => $cm->id]),
+        get_string('displaysettings', 'mod_confprogram'),
+        ['class' => 'btn btn-outline-secondary btn-sm']
+    );
+
+    echo html_writer::end_tag('div');
+}
 
 if (!empty($confprogram->intro)) {
     echo $OUTPUT->box(format_module_intro('confprogram', $confprogram, $cm->id), 'generalbox', 'intro');
@@ -100,7 +160,6 @@ if ($confprogram->phase === 'review') {
     // theirs that is currently awaiting resubmission. Fetching own submissions here (rather
     // than requiring mod/confsubmissions:viewall) is safe: get_submissions_for_instance()
     // is filtered to userid = $USER->id, i.e. only the current user's own data.
-    $confsubmissionscm = get_coursemodule_from_id('confsubmissions', $confprogram->confsubmissionscmid, 0, false, MUST_EXIST);
     $mysubmissions = submissions_api::get_submissions_for_instance($confsubmissionscm->instance, ['userid' => $USER->id]);
     $resubmitlinks = [];
     foreach ($mysubmissions as $mysubmission) {
@@ -114,6 +173,154 @@ if ($confprogram->phase === 'review') {
     if ($resubmitlinks) {
         echo $OUTPUT->heading(get_string('resubmissionsneeded', 'mod_confprogram'), 4);
         echo html_writer::alist($resubmitlinks);
+    }
+} else if ($confprogram->phase === 'display') {
+    $favouritesonly = optional_param('favouritesonly', 0, PARAM_BOOL);
+    $selectedday = optional_param('day', '', PARAM_SAFEDIR);
+
+    $availablefields = field_settings::get_available_fields((int) $confsubmissionscm->instance);
+    $listfields = array_values(array_diff(
+        field_settings::get_visible_fieldnames((int) $confprogram->id, $availablefields, 'list'),
+        ['title'] // Title is always rendered as the row's clickable link; never duplicated as a plain field.
+    ));
+
+    $accepted = display_list::get_accepted_submissions((int) $confprogram->id, (int) $confsubmissionscm->instance);
+    $decorated = display_list::sort_by_schedule_then_title(display_list::attach_schedule($accepted));
+
+    $canfavourite = !isguestuser() && has_capability('mod/confprogram:favourite', $context);
+
+    if ($favouritesonly) {
+        $decorated = array_values(array_filter(
+            $decorated,
+            fn($row) => api::is_favourited((int) $USER->id, (int) $row->submission->id)
+        ));
+    }
+
+    echo $OUTPUT->heading(get_string('acceptedsubmissions', 'mod_confprogram'), 3);
+
+    $filterurl = new moodle_url($pageurl, array_filter(['day' => $selectedday]));
+    if ($favouritesonly) {
+        $filterurl->param('favouritesonly', 0);
+        echo html_writer::tag('p', html_writer::link($filterurl, get_string('showallsubmissions', 'mod_confprogram'), [
+            'class' => 'btn btn-outline-secondary btn-sm',
+        ]));
+    } else {
+        $filterurl->param('favouritesonly', 1);
+        echo html_writer::tag('p', html_writer::link($filterurl, get_string('favouritesonly', 'mod_confprogram'), [
+            'class' => 'btn btn-outline-secondary btn-sm',
+        ]));
+    }
+
+    $groups = display_list::group_by_day($decorated);
+    $daykeys = array_keys($groups);
+    $showdayselector = !($daykeys === ['unscheduled']);
+
+    if ($showdayselector) {
+        $default = ($selectedday !== '' && isset($groups[$selectedday]))
+            ? $selectedday
+            : display_list::default_day_key($groups);
+
+        $options = [];
+        foreach ($daykeys as $key) {
+            $options[$key] = $key === 'unscheduled'
+                ? get_string('unscheduled', 'mod_confprogram')
+                : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
+        }
+
+        echo html_writer::start_tag('form', [
+            'method' => 'get',
+            'action' => $pageurl->out_omit_querystring(),
+            'class'  => 'form-inline mb-3',
+        ]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+        if ($favouritesonly) {
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'favouritesonly', 'value' => 1]);
+        }
+        echo html_writer::tag('label', get_string('day', 'mod_confprogram'), ['for' => 'confprogram-day', 'class' => 'mr-2']);
+        echo html_writer::select($options, 'day', $default, false, ['id' => 'confprogram-day', 'class' => 'mr-2']);
+        echo html_writer::empty_tag('input', [
+            'type'  => 'submit',
+            'value' => get_string('showday', 'mod_confprogram'),
+            'class' => 'btn btn-secondary btn-sm',
+        ]);
+        echo html_writer::end_tag('form');
+
+        $rows = $groups[$default] ?? [];
+    } else {
+        $rows = $decorated;
+    }
+
+    if ($rows) {
+        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
+
+        $table = new html_table();
+        $table->attributes['class'] = 'generaltable confprogram-list-table';
+        $head = [get_string('title', 'mod_confsubmissions')];
+        foreach ($listfields as $fieldname) {
+            $head[] = field_formatter::get_label($fieldname);
+        }
+        $head[] = get_string('timeandroom', 'mod_confprogram');
+        $head[] = get_string('favourite', 'mod_confprogram');
+        $table->head = $head;
+
+        foreach ($rows as $row) {
+            $submission = $row->submission;
+            $data = [];
+
+            $titlelink = html_writer::link('#', format_string($submission->title), [
+                'class'              => 'confprogram-open-detail',
+                'data-cmid'          => $cm->id,
+                'data-submissionid'  => $submission->id,
+            ]);
+            $titlecell = new html_table_cell($titlelink);
+            $titlecell->attributes['data-label'] = get_string('title', 'mod_confsubmissions');
+            $data[] = $titlecell;
+
+            foreach ($listfields as $fieldname) {
+                $value = field_formatter::format_value($fieldname, $submission);
+                $cell = new html_table_cell(s($value));
+                $cell->attributes['data-label'] = field_formatter::get_label($fieldname);
+                $data[] = $cell;
+            }
+
+            $scheduletext = schedule_info::format_for_display(schedule_info::get_for_submission((int) $submission->id));
+            $schedulecell = new html_table_cell(s($scheduletext));
+            $schedulecell->attributes['data-label'] = get_string('timeandroom', 'mod_confprogram');
+            $schedulecell->attributes['class'] .= ' confprogram-schedule';
+            $data[] = $schedulecell;
+
+            if ($canfavourite) {
+                $isfavourited = api::is_favourited((int) $USER->id, (int) $submission->id);
+                $starlabel = $isfavourited
+                    ? get_string('unfavourite', 'mod_confprogram')
+                    : get_string('favourite', 'mod_confprogram');
+                $starbutton = html_writer::tag('button', html_writer::tag('i', '', [
+                    'class'       => $isfavourited ? 'icon fa fa-star' : 'icon fa fa-star-o',
+                    'aria-hidden' => 'true',
+                ]) . html_writer::tag('span', $starlabel, ['class' => 'sr-only']), [
+                    'type'              => 'button',
+                    'class'             => 'confprogram-favourite-toggle' . ($isfavourited ? ' confprogram-favourited' : ''),
+                    'data-cmid'         => $cm->id,
+                    'data-submissionid' => $submission->id,
+                    'data-favourited'   => $isfavourited ? '1' : '0',
+                    'aria-pressed'      => $isfavourited ? 'true' : 'false',
+                ]);
+                $favcell = new html_table_cell($starbutton);
+            } else {
+                $favcell = new html_table_cell('');
+            }
+            $favcell->attributes['data-label'] = get_string('favourite', 'mod_confprogram');
+            $data[] = $favcell;
+
+            $table->data[] = $data;
+        }
+
+        echo html_writer::table($table);
+        echo html_writer::end_tag('div');
+
+        $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');
+    } else {
+        echo $OUTPUT->notification(get_string('noacceptedsubmissions', 'mod_confprogram'), 'info');
     }
 }
 

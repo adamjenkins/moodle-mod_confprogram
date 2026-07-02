@@ -176,4 +176,71 @@ final class api_test extends advanced_testcase {
         $this->assertSame('accept', $decision->decision);
         $this->assertSame(2, (int) $decision->round);
     }
+
+    /**
+     * add_favourite()/remove_favourite()/is_favourited() round-trip: favouriting
+     * flips is_favourited() to true, is idempotent (no duplicate rows), and
+     * unfavouriting flips it back to false.
+     */
+    public function test_favourite_add_remove_round_trip(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid] = $this->create_confprogram();
+        $user = $this->getDataGenerator()->create_user();
+
+        $this->assertFalse(api::is_favourited((int) $user->id, 1));
+
+        api::add_favourite($confprogramid, 1, (int) $user->id);
+        $this->assertTrue(api::is_favourited((int) $user->id, 1));
+
+        // Idempotent: favouriting an already-favourited submission does not create a
+        // duplicate row.
+        api::add_favourite($confprogramid, 1, (int) $user->id);
+        $this->assertSame(1, $DB->count_records('confprogram_favourite', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => 1,
+            'userid'       => $user->id,
+        ]));
+
+        api::remove_favourite($confprogramid, 1, (int) $user->id);
+        $this->assertFalse(api::is_favourited((int) $user->id, 1));
+
+        // Unfavouriting something never favourited is a safe no-op.
+        api::remove_favourite($confprogramid, 1, (int) $user->id);
+        $this->assertFalse(api::is_favourited((int) $user->id, 1));
+    }
+
+    /**
+     * get_favourites() returns a user's favourites within a single confprogram
+     * instance only, and add_favourite()/remove_favourite() do not affect other
+     * users' favourites of the same submission.
+     */
+    public function test_get_favourites_scoped_per_instance_and_user(): void {
+        $this->resetAfterTest();
+
+        [$course, $confprogramid1] = $this->create_confprogram();
+        $confsubmissions2 = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $confsubmissionscm2 = get_coursemodule_from_instance('confsubmissions', $confsubmissions2->id);
+        $confprogram2 = $this->getDataGenerator()->create_module('confprogram', [
+            'course'              => $course->id,
+            'confsubmissionscmid' => $confsubmissionscm2->id,
+        ]);
+        $usera = $this->getDataGenerator()->create_user();
+        $userb = $this->getDataGenerator()->create_user();
+
+        api::add_favourite($confprogramid1, 1, (int) $usera->id);
+        api::add_favourite($confprogramid1, 2, (int) $usera->id);
+        api::add_favourite($confprogramid1, 1, (int) $userb->id);
+        api::add_favourite((int) $confprogram2->id, 1, (int) $usera->id);
+
+        $favouritesa = api::get_favourites((int) $usera->id, $confprogramid1);
+        $favouritesb = api::get_favourites((int) $userb->id, $confprogramid1);
+
+        $this->assertCount(2, $favouritesa);
+        $this->assertCount(1, $favouritesb);
+        $this->assertTrue(api::is_favourited((int) $usera->id, 1));
+        $this->assertTrue(api::is_favourited((int) $userb->id, 1));
+        $this->assertFalse(api::is_favourited((int) $userb->id, 2));
+    }
 }

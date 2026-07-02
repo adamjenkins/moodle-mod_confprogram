@@ -113,13 +113,15 @@ function confprogram_delete_instance($id) {
 }
 
 /**
- * Adds navigation nodes for the Review phase screens of this activity.
+ * Adds navigation nodes for the Review and Display phase screens of this activity.
  *
  * Each node is only added for users holding the corresponding capability, so
  * a plain reviewer only ever sees "My review queue", never the
  * organiser-only screens; unvetted.php is deliberately not linked from
  * anywhere else, so it only appears here, only for
- * mod/confprogram:manageunvetted holders.
+ * mod/confprogram:manageunvetted holders. The Display field settings link is
+ * added regardless of the current phase: organisers configure it before
+ * switching to the Display phase.
  *
  * @param navigation_node $navigation The navigation node to extend
  * @param stdClass $course The course object
@@ -146,6 +148,14 @@ function confprogram_extend_navigation(navigation_node $navigation, stdClass $co
             navigation_node::TYPE_SETTING,
             null,
             'confprogramassign'
+        );
+
+        $navigation->add(
+            get_string('displaysettings', 'mod_confprogram'),
+            new moodle_url('/mod/confprogram/displaysettings.php', ['id' => $cm->id]),
+            navigation_node::TYPE_SETTING,
+            null,
+            'confprogramdisplaysettings'
         );
     }
 

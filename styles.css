@@ -1,0 +1,82 @@
+/* This file is part of Moodle - http://moodle.org/
+ *
+ * Moodle is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Moodle is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/**
+ * Styles for mod_confprogram's Display-phase accepted-submissions list.
+ *
+ * Modest, targeted CSS only: mostly making the list-table readable on narrow
+ * screens (a stacked "card" layout below the breakpoint) rather than a full visual
+ * redesign, since the list otherwise reuses standard generaltable/Bootstrap classes.
+ */
+
+.mod_confprogram-list .confprogram-favourite-toggle {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    color: #6c757d;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.mod_confprogram-list .confprogram-favourite-toggle.confprogram-favourited {
+    color: #f0ad4e;
+}
+
+.mod_confprogram-list .confprogram-schedule,
+.mod_confprogram-submission-modal .confprogram-schedule {
+    color: #6c757d;
+}
+
+.mod_confprogram-submission-modal .confprogram-field-value {
+    white-space: pre-wrap;
+}
+
+@media (max-width: 576px) {
+    .mod_confprogram-list table.confprogram-list-table,
+    .mod_confprogram-list table.confprogram-list-table thead,
+    .mod_confprogram-list table.confprogram-list-table tbody,
+    .mod_confprogram-list table.confprogram-list-table th,
+    .mod_confprogram-list table.confprogram-list-table td,
+    .mod_confprogram-list table.confprogram-list-table tr {
+        display: block;
+    }
+
+    .mod_confprogram-list table.confprogram-list-table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+
+    .mod_confprogram-list table.confprogram-list-table tr {
+        margin-bottom: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+    }
+
+    .mod_confprogram-list table.confprogram-list-table td {
+        border: none;
+        padding: 0.25rem 0;
+    }
+
+    .mod_confprogram-list table.confprogram-list-table td::before {
+        content: attr(data-label);
+        display: block;
+        font-weight: bold;
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+}
