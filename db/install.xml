@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confprogram/db" VERSION="2026070300" COMMENT="XMLDB file for Moodle mod/confprogram"
+<XMLDB PATH="mod/confprogram/db" VERSION="2026070301" COMMENT="XMLDB file for Moodle mod/confprogram"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -41,6 +41,25 @@
       <INDEXES>
         <INDEX NAME="submissionid" UNIQUE="false" FIELDS="submissionid"/>
       </INDEXES>
+    </TABLE>
+    <TABLE NAME="confprogram_review" COMMENT="A completed rubric review by one reviewer of one submission, mirroring the core grading API instance so scores can be reported without re-querying it">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="References mod_confsubmissions's confsubmissions_submission.id. Not a real foreign key: cross-plugin reference"/>
+        <FIELD NAME="reviewerid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table; the reviewer who filled this rubric"/>
+        <FIELD NAME="round" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Matches confprogram_decision.round; a resubmission starts a fresh round of reviews"/>
+        <FIELD NAME="gradinginstanceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="The core grading API gradinginstanceid (grading_instances.id) this review's rubric fill-in lives in"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" NOTNULL="false" SEQUENCE="false" DECIMALS="5" COMMENT="The numeric grade computed by the rubric, as returned by gradingform_instance::submit_and_get_grade(); null until submitted"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="reviewerid" TYPE="foreign" FIELDS="reviewerid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="confprogram-submissionid-reviewerid-round" TYPE="unique" FIELDS="confprogram, submissionid, reviewerid, round"/>
+      </KEYS>
     </TABLE>
     <TABLE NAME="confprogram_reviewermax" COMMENT="Per-reviewer override of the max-reviews cap used in group-review mode">
       <FIELDS>
