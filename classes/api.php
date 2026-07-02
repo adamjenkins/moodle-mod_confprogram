@@ -20,11 +20,10 @@ namespace mod_confprogram;
  * Public integration surface for the Conference Program (vetting) workflow.
  *
  * Covers read accessors over this plugin's own tables (phase, unvetted flags,
- * decisions, favourites). Write operations (assigning reviewers, submitting
- * rubric reviews, recording decisions, toggling unvetted/favourite state) are
- * a follow-up task; this scaffold only provides the read paths needed by
- * view.php and by other conference-tools plugins that need to know a
- * submission's vetting outcome.
+ * decisions, favourites) plus the write operations needed by the Review
+ * phase screens (assigning reviewers/reviewer groups, upserting rubric
+ * review scores, recording decisions, toggling the unvetted flag). Favourite
+ * toggling is Display-phase territory and remains a follow-up task.
  *
  * Capability contract: these methods do NOT check capabilities or context
  * themselves — they are a raw data-access layer only. Decision and reviewer
@@ -121,5 +120,351 @@ class api {
             ['userid' => $userid, 'confprogram' => $confprogramid],
             'timecreated ASC'
         );
+    }
+
+    /**
+     * Returns the reviewer assignments (individual or group) for a submission
+     * within a single confprogram instance.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @return \stdClass[] Array of confprogram_assignment records, keyed by id
+     */
+    public static function get_assignments(int $confprogramid, int $submissionid): array {
+        global $DB;
+
+        return $DB->get_records(
+            'confprogram_assignment',
+            ['confprogram' => $confprogramid, 'submissionid' => $submissionid],
+            'timecreated ASC'
+        );
+    }
+
+    /**
+     * Whether a user is assigned to review a submission, either directly
+     * (reviewerid) or via membership of an assigned reviewer group
+     * (reviewergroupid).
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $userid The user id to check
+     * @return bool
+     */
+    public static function is_user_assigned(int $confprogramid, int $submissionid, int $userid): bool {
+        global $DB;
+
+        $directassignment = $DB->record_exists('confprogram_assignment', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'reviewerid'   => $userid,
+        ]);
+        if ($directassignment) {
+            return true;
+        }
+
+        $groupassignments = $DB->get_records('confprogram_assignment', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+        ]);
+
+        foreach ($groupassignments as $assignment) {
+            if (!empty($assignment->reviewergroupid) && groups_is_member($assignment->reviewergroupid, $userid)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns the ids of submissions (within a confprogram instance) that a
+     * user is assigned to review, either directly or via reviewer group
+     * membership.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $userid The reviewer's user id
+     * @return int[] Distinct submission ids, not in any particular order
+     */
+    public static function get_assigned_submission_ids_for_user(int $confprogramid, int $userid): array {
+        global $DB;
+
+        $submissionids = $DB->get_fieldset_select(
+            'confprogram_assignment',
+            'DISTINCT submissionid',
+            'confprogram = :confprogram AND reviewerid = :reviewerid',
+            ['confprogram' => $confprogramid, 'reviewerid' => $userid]
+        );
+
+        $groupassignments = $DB->get_records_select(
+            'confprogram_assignment',
+            'confprogram = :confprogram AND reviewergroupid IS NOT NULL',
+            ['confprogram' => $confprogramid]
+        );
+        foreach ($groupassignments as $assignment) {
+            if (groups_is_member($assignment->reviewergroupid, $userid)) {
+                $submissionids[] = (int) $assignment->submissionid;
+            }
+        }
+
+        return array_values(array_unique(array_map('intval', $submissionids)));
+    }
+
+    /**
+     * Assigns an individual reviewer to a submission. A no-op (returns the
+     * existing row's id) if this exact assignment already exists.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $reviewerid The reviewer's user id
+     * @return int The confprogram_assignment id
+     */
+    public static function assign_reviewer(int $confprogramid, int $submissionid, int $reviewerid): int {
+        global $DB;
+
+        $existing = $DB->get_field('confprogram_assignment', 'id', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'reviewerid'   => $reviewerid,
+        ]);
+        if ($existing) {
+            return (int) $existing;
+        }
+
+        return $DB->insert_record('confprogram_assignment', (object) [
+            'confprogram'     => $confprogramid,
+            'submissionid'    => $submissionid,
+            'reviewerid'      => $reviewerid,
+            'reviewergroupid' => null,
+            'timecreated'     => time(),
+        ]);
+    }
+
+    /**
+     * Assigns a reviewer group (a standard course group) to a submission. A
+     * no-op (returns the existing row's id) if this exact assignment already
+     * exists.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $groupid The course group id
+     * @return int The confprogram_assignment id
+     */
+    public static function assign_reviewer_group(int $confprogramid, int $submissionid, int $groupid): int {
+        global $DB;
+
+        $existing = $DB->get_field('confprogram_assignment', 'id', [
+            'confprogram'     => $confprogramid,
+            'submissionid'    => $submissionid,
+            'reviewergroupid' => $groupid,
+        ]);
+        if ($existing) {
+            return (int) $existing;
+        }
+
+        return $DB->insert_record('confprogram_assignment', (object) [
+            'confprogram'     => $confprogramid,
+            'submissionid'    => $submissionid,
+            'reviewerid'      => null,
+            'reviewergroupid' => $groupid,
+            'timecreated'     => time(),
+        ]);
+    }
+
+    /**
+     * Removes a reviewer or reviewer-group assignment.
+     *
+     * @param int $confprogramid The confprogram instance id, so the deletion is scoped to it
+     * @param int $assignmentid The confprogram_assignment id
+     * @return bool
+     */
+    public static function unassign(int $confprogramid, int $assignmentid): bool {
+        global $DB;
+
+        // Scoped by confprogramid so a managereviewers holder in one instance cannot delete
+        // an assignment row belonging to a different confprogram instance by guessing its id.
+        return $DB->delete_records('confprogram_assignment', [
+            'id'         => $assignmentid,
+            'confprogram' => $confprogramid,
+        ]);
+    }
+
+    /**
+     * Returns a single reviewer's review of a submission for a given round,
+     * or null if they have not reviewed it (in that round) yet.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $reviewerid The reviewer's user id
+     * @param int $round The review round
+     * @return \stdClass|null
+     */
+    public static function get_review(int $confprogramid, int $submissionid, int $reviewerid, int $round): ?\stdClass {
+        global $DB;
+
+        $record = $DB->get_record('confprogram_review', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'reviewerid'   => $reviewerid,
+            'round'        => $round,
+        ]);
+
+        return $record ?: null;
+    }
+
+    /**
+     * Returns all COMPLETED reviews of a submission for a given round, across
+     * all reviewers.
+     *
+     * "Completed" excludes placeholder rows with gradinginstanceid = 0: a
+     * placeholder is created by upsert_review() the moment a reviewer opens
+     * the review form (so a stable itemid exists for the core grading API to
+     * use — see review.php for why), before they have actually submitted
+     * anything. Such a row must not be reported as a real review here (nor
+     * counted in \mod_confprogram\local\reviewer_workload::completed_count(),
+     * which applies the same filter): a reviewer who merely opened the form
+     * and never submitted has not completed a review.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $round The review round
+     * @return \stdClass[] Array of confprogram_review records, keyed by id
+     */
+    public static function get_reviews_for_round(int $confprogramid, int $submissionid, int $round): array {
+        global $DB;
+
+        return $DB->get_records_select(
+            'confprogram_review',
+            'confprogram = :confprogram AND submissionid = :submissionid AND round = :round AND gradinginstanceid <> 0',
+            ['confprogram' => $confprogramid, 'submissionid' => $submissionid, 'round' => $round],
+            'timecreated ASC'
+        );
+    }
+
+    /**
+     * Inserts or updates a reviewer's review of a submission for a round.
+     * Upserts on the (confprogram, submissionid, reviewerid, round) unique
+     * key, matching the grading API instance the review mirrors: re-editing
+     * an existing review updates the same row rather than creating a new one.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $reviewerid The reviewer's user id
+     * @param int $round The review round
+     * @param int $gradinginstanceid The core grading API grading_instances.id
+     * @param float|null $grade The numeric grade computed by the rubric
+     * @return int The confprogram_review id
+     */
+    public static function upsert_review(
+        int $confprogramid,
+        int $submissionid,
+        int $reviewerid,
+        int $round,
+        int $gradinginstanceid,
+        ?float $grade
+    ): int {
+        global $DB;
+
+        $existing = self::get_review($confprogramid, $submissionid, $reviewerid, $round);
+        $now = time();
+
+        if ($existing) {
+            $DB->update_record('confprogram_review', (object) [
+                'id'                => $existing->id,
+                'gradinginstanceid' => $gradinginstanceid,
+                'grade'             => $grade,
+                'timemodified'      => $now,
+            ]);
+            return (int) $existing->id;
+        }
+
+        return $DB->insert_record('confprogram_review', (object) [
+            'confprogram'       => $confprogramid,
+            'submissionid'      => $submissionid,
+            'reviewerid'        => $reviewerid,
+            'round'             => $round,
+            'gradinginstanceid' => $gradinginstanceid,
+            'grade'             => $grade,
+            'timecreated'       => $now,
+            'timemodified'      => $now,
+        ]);
+    }
+
+    /**
+     * Records a decision for a submission in a given round. Each call
+     * inserts a new row (confprogram_decision is an append-only log), so
+     * re-deciding a round is possible and simply adds another entry; readers
+     * that want "the" decision for a round should take the most recent by
+     * timecreated (see \mod_confprogram\local\rounds::get_latest_decision()).
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param string $decision One of accept, reject, resubmit, waitlist
+     * @param int $round The review round this decision concludes
+     * @param int $decidedby The user id making the decision
+     * @return int The confprogram_decision id
+     */
+    public static function record_decision(
+        int $confprogramid,
+        int $submissionid,
+        string $decision,
+        int $round,
+        int $decidedby
+    ): int {
+        global $DB;
+
+        return $DB->insert_record('confprogram_decision', (object) [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'decision'     => $decision,
+            'round'        => $round,
+            'decidedby'    => $decidedby,
+            'timecreated'  => time(),
+        ]);
+    }
+
+    /**
+     * Flags a submission as unvetted (exempt from review), e.g. a panel or
+     * keynote added directly to the programme without going through review.
+     * A no-op if already flagged.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $setby The user id flagging the submission
+     * @return void
+     */
+    public static function set_unvetted(int $confprogramid, int $submissionid, int $setby): void {
+        global $DB;
+
+        $alreadyunvetted = $DB->record_exists('confprogram_unvetted', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+        ]);
+        if ($alreadyunvetted) {
+            return;
+        }
+
+        $DB->insert_record('confprogram_unvetted', (object) [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+            'setby'        => $setby,
+            'timecreated'  => time(),
+        ]);
+    }
+
+    /**
+     * Removes the unvetted flag from a submission, returning it to the
+     * normal review workflow.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @return void
+     */
+    public static function unset_unvetted(int $confprogramid, int $submissionid): void {
+        global $DB;
+
+        $DB->delete_records('confprogram_unvetted', [
+            'confprogram'  => $confprogramid,
+            'submissionid' => $submissionid,
+        ]);
     }
 }

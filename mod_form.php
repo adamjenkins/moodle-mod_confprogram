@@ -35,6 +35,9 @@ require_once($CFG->dirroot . '/course/moodleform_mod.php');
  * phase-specific settings for Review vs. Display) is a follow-up task.
  */
 class mod_confprogram_mod_form extends moodleform_mod {
+    /** @var int[] Valid confsubmissionscmid option keys (course_module ids in this course), set by definition(). */
+    protected $confsubmissionscmids = [];
+
     /**
      * Defines the form fields.
      */
@@ -72,6 +75,7 @@ class mod_confprogram_mod_form extends moodleform_mod {
         foreach ($confsubmissionscms as $cm) {
             $options[$cm->id] = format_string($cm->name);
         }
+        $this->confsubmissionscmids = array_keys($options);
 
         $mform->addElement(
             'select',
@@ -90,9 +94,31 @@ class mod_confprogram_mod_form extends moodleform_mod {
             );
         }
 
-        // TODO: phase-specific settings (blind review, group-review mode, default max
-        // reviews, Display-phase field visibility) are a follow-up task. For now these
-        // columns are populated with their schema defaults by confprogram_add_instance().
+        // Review-phase settings. Display-phase field visibility settings remain a
+        // follow-up task (built alongside the Display-phase screens).
+        $mform->addElement('header', 'reviewsettings', get_string('reviewsettings', 'mod_confprogram'));
+        $mform->setExpanded('reviewsettings');
+
+        $mform->addElement('advcheckbox', 'blindreview', get_string('blindreview', 'mod_confprogram'));
+        $mform->setType('blindreview', PARAM_BOOL);
+        $mform->addHelpButton('blindreview', 'blindreview', 'mod_confprogram');
+        $mform->setDefault('blindreview', 0);
+
+        $mform->addElement('advcheckbox', 'groupreviewmode', get_string('groupreviewmode', 'mod_confprogram'));
+        $mform->setType('groupreviewmode', PARAM_BOOL);
+        $mform->addHelpButton('groupreviewmode', 'groupreviewmode', 'mod_confprogram');
+        $mform->setDefault('groupreviewmode', 0);
+
+        $mform->addElement(
+            'text',
+            'defaultmaxreviews',
+            get_string('defaultmaxreviews', 'mod_confprogram'),
+            ['size' => 5]
+        );
+        $mform->setType('defaultmaxreviews', PARAM_INT);
+        $mform->addHelpButton('defaultmaxreviews', 'defaultmaxreviews', 'mod_confprogram');
+        $mform->setDefault('defaultmaxreviews', 0);
+        $mform->addRule('defaultmaxreviews', get_string('error:invalidnumber', 'mod_confprogram'), 'numeric', null, 'client');
 
         // Standard module elements (visibility, groups, etc.).
         $this->standard_coursemodule_elements();
@@ -112,6 +138,15 @@ class mod_confprogram_mod_form extends moodleform_mod {
 
         if (empty($data['confsubmissionscmid'])) {
             $errors['confsubmissionscmid'] = get_string('required');
+        } else if (!in_array((int) $data['confsubmissionscmid'], $this->confsubmissionscmids, true)) {
+            // Reject a submitted value outside the course-scoped option set the UI actually
+            // offered (e.g. a confsubmissions activity in an unrelated course), since every
+            // downstream page trusts confprogram.confsubmissionscmid implicitly.
+            $errors['confsubmissionscmid'] = get_string('error:invalidconfsubmissionscmid', 'mod_confprogram');
+        }
+
+        if (isset($data['defaultmaxreviews']) && (int) $data['defaultmaxreviews'] < 0) {
+            $errors['defaultmaxreviews'] = get_string('error:invalidnumber', 'mod_confprogram');
         }
 
         return $errors;

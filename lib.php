@@ -111,3 +111,61 @@ function confprogram_delete_instance($id) {
 
     return true;
 }
+
+/**
+ * Adds navigation nodes for the Review phase screens of this activity.
+ *
+ * Each node is only added for users holding the corresponding capability, so
+ * a plain reviewer only ever sees "My review queue", never the
+ * organiser-only screens; unvetted.php is deliberately not linked from
+ * anywhere else, so it only appears here, only for
+ * mod/confprogram:manageunvetted holders.
+ *
+ * @param navigation_node $navigation The navigation node to extend
+ * @param stdClass $course The course object
+ * @param stdClass $module The module instance record
+ * @param cm_info $cm The course-module object
+ */
+function confprogram_extend_navigation(navigation_node $navigation, stdClass $course, stdClass $module, cm_info $cm) {
+    $context = context_module::instance($cm->id);
+
+    if (has_capability('mod/confprogram:review', $context)) {
+        $navigation->add(
+            get_string('myreviewqueue', 'mod_confprogram'),
+            new moodle_url('/mod/confprogram/review.php', ['id' => $cm->id]),
+            navigation_node::TYPE_SETTING,
+            null,
+            'confprogramreviewqueue'
+        );
+    }
+
+    if (has_capability('mod/confprogram:managereviewers', $context)) {
+        $navigation->add(
+            get_string('assignreviewers', 'mod_confprogram'),
+            new moodle_url('/mod/confprogram/assign.php', ['id' => $cm->id]),
+            navigation_node::TYPE_SETTING,
+            null,
+            'confprogramassign'
+        );
+    }
+
+    if (has_capability('mod/confprogram:decide', $context)) {
+        $navigation->add(
+            get_string('decisionreport', 'mod_confprogram'),
+            new moodle_url('/mod/confprogram/decisions.php', ['id' => $cm->id]),
+            navigation_node::TYPE_SETTING,
+            null,
+            'confprogramdecisions'
+        );
+    }
+
+    if (has_capability('mod/confprogram:manageunvetted', $context)) {
+        $navigation->add(
+            get_string('unvettedsubmissions', 'mod_confprogram'),
+            new moodle_url('/mod/confprogram/unvetted.php', ['id' => $cm->id]),
+            navigation_node::TYPE_SETTING,
+            null,
+            'confprogramunvetted'
+        );
+    }
+}
