@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/confprogram/db" VERSION="2026070300" COMMENT="XMLDB file for Moodle mod/confprogram"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
+  <TABLES>
+    <TABLE NAME="confprogram" COMMENT="Main table for Conference Program activity instances">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Course this activity belongs to"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Activity name"/>
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Activity description shown on course page"/>
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Format of the intro field"/>
+        <FIELD NAME="confsubmissionscmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Course-module id of the mod_confsubmissions instance this program vets"/>
+        <FIELD NAME="phase" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="review" COMMENT="review or display"/>
+        <FIELD NAME="blindreview" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether submitter/reviewer identities are hidden from each other during review"/>
+        <FIELD NAME="groupreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether reviewers are assigned as members of reviewer groups rather than individually"/>
+        <FIELD NAME="defaultmaxreviews" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Default per-reviewer cap on assigned reviews in group-review mode; 0 means unlimited"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="course" TYPE="foreign" FIELDS="course" REFTABLE="course" REFFIELDS="id"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confprogram_assignment" COMMENT="Reviewers (or reviewer groups) assigned to review a submission">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table; kept alongside submissionid so assignments can be queried/deleted per-instance without joining through mod_confsubmissions"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="References mod_confsubmissions's confsubmissions_submission.id. Not a real foreign key: it is a cross-plugin reference into another activity's table"/>
+        <FIELD NAME="reviewerid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Set when this assignment is to an individual reviewer; null when reviewergroupid is set instead. Exactly one of the two is set per row, enforced in code"/>
+        <FIELD NAME="reviewergroupid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Set when this assignment is to a reviewer group; null when reviewerid is set instead. Exactly one of the two is set per row, enforced in code"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="reviewerid" TYPE="foreign" FIELDS="reviewerid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="reviewergroupid" TYPE="foreign" FIELDS="reviewergroupid" REFTABLE="groups" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="submissionid" UNIQUE="false" FIELDS="submissionid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="confprogram_reviewermax" COMMENT="Per-reviewer override of the max-reviews cap used in group-review mode">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table"/>
+        <FIELD NAME="maxreviews" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Maximum reviews this reviewer may be assigned, overriding confprogram.defaultmaxreviews"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="confprogram-userid" TYPE="unique" FIELDS="confprogram, userid"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confprogram_decision" COMMENT="The accept/reject/resubmit/waitlist call made on a submission">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="References mod_confsubmissions's confsubmissions_submission.id. Not a real foreign key: it is a cross-plugin reference into another activity's table"/>
+        <FIELD NAME="decision" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="accept, reject, resubmit or waitlist"/>
+        <FIELD NAME="round" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Increments each time a resubmit cycle completes"/>
+        <FIELD NAME="decidedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table; the user who made this decision"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="decidedby" TYPE="foreign" FIELDS="decidedby" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="submissionid" UNIQUE="false" FIELDS="submissionid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="confprogram_favourite" COMMENT="A user's favourited submission during the Display phase">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="References mod_confsubmissions's confsubmissions_submission.id. Not a real foreign key: it is a cross-plugin reference into another activity's table"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table; the user who favourited this submission"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="confprogram-submissionid-userid" TYPE="unique" FIELDS="confprogram, submissionid, userid"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confprogram_unvetted" COMMENT="Marks a submission as exempt from review (e.g. panels, keynotes)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="submissionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="References mod_confsubmissions's confsubmissions_submission.id. Not a real foreign key: it is a cross-plugin reference into another activity's table"/>
+        <FIELD NAME="setby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table; the user who flagged this submission as unvetted"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="setby" TYPE="foreign" FIELDS="setby" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="confprogram-submissionid" TYPE="unique" FIELDS="confprogram, submissionid"/>
+      </KEYS>
+    </TABLE>
+    <TABLE NAME="confprogram_fieldsetting" COMMENT="Display-phase per-field visibility configuration">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="fieldname" TYPE="char" LENGTH="100" NOTNULL="true" SEQUENCE="false" COMMENT="A field name sourced from mod_confsubmissions, e.g. title, abstract, track, speakers, or an optional fieldname such as language"/>
+        <FIELD NAME="showinlist" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether this field is shown in the accepted-submissions list view"/>
+        <FIELD NAME="showinmodal" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether this field is shown in the submission detail modal"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+        <KEY NAME="confprogram-fieldname" TYPE="unique" FIELDS="confprogram, fieldname"/>
+      </KEYS>
+    </TABLE>
+  </TABLES>
+</XMLDB>
