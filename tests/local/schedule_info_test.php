@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
  * Tests for \mod_confprogram\local\schedule_info: the soft, optional integration
- * point with mod_confscheduler, a plugin that does not exist in this environment.
+ * point with mod_confscheduler.
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -33,13 +33,24 @@ use PHPUnit\Framework\Attributes\CoversClass;
 final class schedule_info_test extends advanced_testcase {
     /**
      * get_for_submission() returns null, without any fatal error or warning, when
-     * mod_confscheduler is not installed -- which is the actual state of this
-     * environment, proving the graceful-degradation contract this class exists for.
+     * mod_confscheduler is not installed, proving the graceful-degradation contract
+     * this class exists for. This originally exercised the real "absent" case in this
+     * shared dev environment; mod_confscheduler was later actually built and installed
+     * here, so the true-absence path can no longer be exercised live -- skip rather
+     * than assert something now false, since forcing "absence" would require faking
+     * core_component's real filesystem-backed component lookup.
      */
     public function test_get_for_submission_returns_null_when_confscheduler_absent(): void {
         $this->resetAfterTest();
 
-        $this->assertNull(\core_component::get_component_directory('mod_confscheduler'));
+        if (\core_component::get_component_directory('mod_confscheduler') !== null) {
+            $this->markTestSkipped(
+                'mod_confscheduler is installed in this environment; the true-absence ' .
+                'path this test exercises cannot be reproduced here. See this method\'s ' .
+                'docblock.'
+            );
+        }
+
         $this->assertFalse(class_exists('\mod_confscheduler\api'));
 
         $this->assertNull(schedule_info::get_for_submission(1));

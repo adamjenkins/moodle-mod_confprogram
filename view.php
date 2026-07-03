@@ -93,6 +93,16 @@ if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers'
 
     echo html_writer::start_tag('div', ['class' => 'confprogram-editcontrols mb-3']);
 
+    // The current-phase indicator is organiser-only context shown alongside the phase
+    // toggle button (below), not a page-wide banner every viewer sees at the top of the
+    // page -- most visitors (reviewers, students) have no use for this internal
+    // organiser-facing state and it isn't the first thing they should see on the page.
+    echo html_writer::tag(
+        'span',
+        get_string('currentphase', 'mod_confprogram', get_string('phase_' . $confprogram->phase, 'mod_confprogram')),
+        ['class' => 'confprogram-currentphase mr-2 text-muted']
+    );
+
     echo html_writer::start_tag('form', [
         'method' => 'post',
         'action' => $pageurl->out_omit_querystring(),
@@ -120,11 +130,6 @@ if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers'
 if (!empty($confprogram->intro)) {
     echo $OUTPUT->box(format_module_intro('confprogram', $confprogram, $cm->id), 'generalbox', 'intro');
 }
-
-echo $OUTPUT->notification(
-    get_string('currentphase', 'mod_confprogram', get_string('phase_' . $confprogram->phase, 'mod_confprogram')),
-    'info'
-);
 
 if ($confprogram->phase === 'review') {
     $links = [];
