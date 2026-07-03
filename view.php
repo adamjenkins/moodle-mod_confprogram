@@ -121,6 +121,21 @@ if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers'
     echo html_writer::link(
         new moodle_url('/mod/confprogram/displaysettings.php', ['id' => $cm->id]),
         get_string('displaysettings', 'mod_confprogram'),
+        ['class' => 'btn btn-outline-secondary btn-sm mr-2']
+    );
+
+    // Persistent entry point to define/edit the review rubric at any time. Previously the
+    // only path to grade/grading/manage.php was a warning notification shown inside a
+    // specific submission's review.php, and only while no grading method was active yet --
+    // once a rubric existed, that link disappeared entirely with no way back to edit it.
+    echo html_writer::link(
+        new moodle_url('/grade/grading/manage.php', [
+            'contextid' => $context->id,
+            'component' => 'mod_confprogram',
+            'area'      => 'review',
+            'returnurl' => $pageurl->out(false),
+        ]),
+        get_string('managereviewform', 'mod_confprogram'),
         ['class' => 'btn btn-outline-secondary btn-sm']
     );
 
@@ -183,6 +198,27 @@ if ($confprogram->phase === 'review') {
     $favouritesonly = optional_param('favouritesonly', 0, PARAM_BOOL);
     $selectedday = optional_param('day', '', PARAM_SAFEDIR);
 
+    // Track filter (Revision round 1, 2026-07-03): a mod_confscheduler track pill links
+    // here with ?trackid=X. Following this file's existing "day" param convention, an
+    // invalid/foreign trackid degrades gracefully to "no filter" rather than erroring --
+    // but unlike "day" (which only narrows an already-instance-scoped list), a trackid
+    // is a globally-unique id (like a submission id -- see RELATIONS.md's chain-of-
+    // custody discussion), so it MUST be verified to belong to the confsubmissions
+    // instance this confprogram vets before its name is ever echoed back, or before it
+    // is trusted for anything beyond a harmless no-op filter. submissions_api::get_tracks()
+    // is itself already instance-scoped (keyed by cmid), so checking membership in its
+    // result is sufficient; only 0 is a well-formed unauthenticated filter.
+    $requestedtrackid = optional_param('trackid', 0, PARAM_INT);
+    $trackid = 0;
+    $trackname = null;
+    if ($requestedtrackid > 0) {
+        $availabletracks = submissions_api::get_tracks($confsubmissionscm->id);
+        if (isset($availabletracks[$requestedtrackid])) {
+            $trackid = $requestedtrackid;
+            $trackname = format_string($availabletracks[$requestedtrackid]->name);
+        }
+    }
+
     $availablefields = field_settings::get_available_fields((int) $confsubmissionscm->instance);
     $listfields = array_values(array_diff(
         field_settings::get_visible_fieldnames((int) $confprogram->id, $availablefields, 'list'),
@@ -191,6 +227,7 @@ if ($confprogram->phase === 'review') {
 
     $accepted = display_list::get_accepted_submissions((int) $confprogram->id, (int) $confsubmissionscm->instance);
     $decorated = display_list::sort_by_schedule_then_title(display_list::attach_schedule($accepted));
+    $decorated = display_list::filter_by_track($decorated, $trackid);
 
     $canfavourite = !isguestuser() && has_capability('mod/confprogram:favourite', $context);
 
@@ -203,7 +240,16 @@ if ($confprogram->phase === 'review') {
 
     echo $OUTPUT->heading(get_string('acceptedsubmissions', 'mod_confprogram'), 3);
 
-    $filterurl = new moodle_url($pageurl, array_filter(['day' => $selectedday]));
+    if ($trackid) {
+        $clearfilterurl = new moodle_url(
+            $pageurl,
+            array_filter(['day' => $selectedday, 'favouritesonly' => $favouritesonly ?: null])
+        );
+        echo html_writer::tag('p', get_string('filteredbytrack', 'mod_confprogram', $trackname) . ' '
+            . html_writer::link($clearfilterurl, get_string('clearfilter', 'mod_confprogram')));
+    }
+
+    $filterurl = new moodle_url($pageurl, array_filter(['day' => $selectedday, 'trackid' => $trackid ?: null]));
     if ($favouritesonly) {
         $filterurl->param('favouritesonly', 0);
         echo html_writer::tag('p', html_writer::link($filterurl, get_string('showallsubmissions', 'mod_confprogram'), [

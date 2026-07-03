@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Revision round 1 (small, narrowly-scoped addition requested by
+  `mod_confscheduler`, 2026-07-03): the Display-phase accepted-submissions
+  list (`view.php`) now accepts an optional `?trackid=X` query parameter,
+  following the exact pattern its existing `day` parameter already uses --
+  it only narrows the already-instance-scoped list via a new, unit-tested
+  `display_list::filter_by_track()`. Since a trackid (like a submissionid)
+  is a globally-unique id, not scoped per course, an invalid or
+  foreign-course trackid is verified against `mod_confsubmissions\api::get_tracks()`
+  (itself instance-scoped) and silently ignored (falls back to "no filter")
+  rather than trusted -- this matters specifically because the matched
+  track's name is echoed back on the page as a "filtered by track: X"
+  indicator, so an unverified id could otherwise leak another course's
+  track name. No existing capability/phase-embargo check in this file was
+  weakened; this is purely a new filter on top of the same already-reviewed
+  code path. `mod_confscheduler`'s track pill badges link here with the new
+  parameter -- see that plugin's own changelog entry for the full feature.
 - Initial scaffold: schema (assignments, reviewer-max overrides, decisions,
   favourites, unvetted flags, display-phase field settings), capabilities,
   full privacy provider, and a `classes/api.php` integration surface.

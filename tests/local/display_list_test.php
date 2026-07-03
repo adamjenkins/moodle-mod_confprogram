@@ -226,4 +226,46 @@ final class display_list_test extends advanced_testcase {
     public function test_default_day_key_falls_back_to_unscheduled(): void {
         $this->assertSame('unscheduled', display_list::default_day_key(['unscheduled' => []]));
     }
+
+    /**
+     * filter_by_track() is a no-op (returns the input unchanged) when given a
+     * trackid of 0, which is how view.php represents "no track filter selected"
+     * (Revision round 1, 2026-07-03).
+     */
+    public function test_filter_by_track_is_noop_for_zero_trackid(): void {
+        $rows = [
+            (object) ['submission' => (object) ['title' => 'A', 'trackid' => 1]],
+            (object) ['submission' => (object) ['title' => 'B', 'trackid' => 2]],
+        ];
+
+        $this->assertSame($rows, display_list::filter_by_track($rows, 0));
+    }
+
+    /**
+     * filter_by_track() keeps only rows whose submission has the given trackid.
+     */
+    public function test_filter_by_track_keeps_only_matching_rows(): void {
+        $matching = (object) ['submission' => (object) ['title' => 'Matches', 'trackid' => 5]];
+        $other = (object) ['submission' => (object) ['title' => 'Different track', 'trackid' => 6]];
+        $rows = [$matching, $other];
+
+        $result = display_list::filter_by_track($rows, 5);
+
+        $this->assertCount(1, $result);
+        $this->assertSame('Matches', reset($result)->submission->title);
+    }
+
+    /**
+     * filter_by_track() treats a submission with no trackid property (or a null/0
+     * trackid) as belonging to no track, so it never matches a real (positive)
+     * trackid filter.
+     */
+    public function test_filter_by_track_excludes_untracked_submissions(): void {
+        $untracked = (object) ['submission' => (object) ['title' => 'No track']];
+        $nulltrack = (object) ['submission' => (object) ['title' => 'Null track', 'trackid' => null]];
+
+        $result = display_list::filter_by_track([$untracked, $nulltrack], 5);
+
+        $this->assertCount(0, $result);
+    }
 }

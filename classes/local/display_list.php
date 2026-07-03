@@ -76,6 +76,35 @@ class display_list {
     }
 
     /**
+     * Filters decorated rows down to those whose submission has the given trackid.
+     *
+     * A no-op (returns $decorated unchanged) when $trackid is 0/falsy, which is how
+     * view.php represents "no track filter selected" (Revision round 1, 2026-07-03 --
+     * added so a mod_confscheduler track-pill click-through can land here pre-filtered).
+     * This is a pure, data-only filter: it does not verify $trackid belongs to the
+     * confsubmissions instance this confprogram vets -- callers (view.php) must do that
+     * themselves before rendering anything derived from the caller-supplied trackid
+     * (e.g. a track name), the same "verify a caller-supplied id belongs to the
+     * expected instance" pattern used throughout this project. Kept deliberately
+     * narrow (given an already-decorated row list and a trackid, keep only matching
+     * rows) so it is unit-testable without needing a real confsubmissions_track row.
+     *
+     * @param \stdClass[] $decorated Rows as returned by attach_schedule()
+     * @param int $trackid The confsubmissions_track id to filter to; 0 means "no filter"
+     * @return \stdClass[] The filtered subset, reindexed from 0
+     */
+    public static function filter_by_track(array $decorated, int $trackid): array {
+        if ($trackid <= 0) {
+            return $decorated;
+        }
+
+        return array_values(array_filter(
+            $decorated,
+            fn($row) => (int) ($row->submission->trackid ?? 0) === $trackid
+        ));
+    }
+
+    /**
      * Decorates a list of submissions with their (optional) schedule info.
      *
      * @param \stdClass[] $submissions Submission records

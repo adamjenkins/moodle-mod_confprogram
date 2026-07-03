@@ -14,7 +14,7 @@ Part of the [Conference Tools](https://github.com/adamjenkins/moodle-conference-
 Operates in two phases, switchable in edit mode:
 
 - **Review phase**: assign reviewers (individually or via reviewer groups) to submissions, review using a rubric (built on Moodle's core advanced grading API), optionally blind (hiding submitter/reviewer identities from each other), flag panels/keynotes as "unvetted" (excluded from review), and record a final Accept/Reject/Resubmit/Waitlist decision. "Resubmit" reopens the submission for editing with reviewer feedback visible, for a second review round.
-- **Display phase**: a responsive, filterable, day-by-day list of accepted submissions with a "favourite" feature, syncing time/room/favourite state with mod_confscheduler.
+- **Display phase**: a responsive, filterable, day-by-day list of accepted submissions with a "favourite" feature, syncing time/room/favourite state with mod_confscheduler. The list also accepts an optional `?trackid=X` query parameter (verified against this instance's own tracks before use) to filter to a single track -- the destination of mod_confscheduler's clickable track-pill badges.
 
 ## Requirements
 
