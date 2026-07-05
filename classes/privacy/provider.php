@@ -35,6 +35,9 @@ use core_privacy\local\request\writer;
  *   (decidedby).
  * - confprogram_favourite: the user (userid) who favourited a submission.
  * - confprogram_unvetted: the user (setby) who flagged a submission as unvetted.
+ * confprogram_notiftemplate (organiser-authored decision-notification subject/body
+ * text) is NOT covered here -- it is instance configuration, not personal data,
+ * matching mod_confcheckin's own confcheckin_template exclusion.
  *
  * mod_confsubmissions's own tables (the submissions being vetted) are that plugin's
  * privacy responsibility, not this one's; a submissionid stored on these rows is a
@@ -70,10 +73,11 @@ class provider implements
         ], 'privacy:metadata:confprogram_reviewermax');
 
         $collection->add_database_table('confprogram_decision', [
-            'decidedby'   => 'privacy:metadata:confprogram_decision:decidedby',
-            'decision'    => 'privacy:metadata:confprogram_decision:decision',
-            'round'       => 'privacy:metadata:confprogram_decision:round',
-            'timecreated' => 'privacy:metadata:confprogram_decision:timecreated',
+            'decidedby'    => 'privacy:metadata:confprogram_decision:decidedby',
+            'decision'     => 'privacy:metadata:confprogram_decision:decision',
+            'round'        => 'privacy:metadata:confprogram_decision:round',
+            'timecreated'  => 'privacy:metadata:confprogram_decision:timecreated',
+            'notifiedtime' => 'privacy:metadata:confprogram_decision:notifiedtime',
         ], 'privacy:metadata:confprogram_decision');
 
         $collection->add_database_table('confprogram_favourite', [

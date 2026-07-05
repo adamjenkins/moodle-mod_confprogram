@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- User feedback (2026-07-05): "on the submission being accepted, rejected, or
+  waitlisted" a notification should be sent to every presenter. Added a
+  decision notification, sent via Moodle's own core notification system
+  (email on by default) to every real (userid-backed) speaker on a
+  submission -- but, per an explicit follow-up confirmation, only once this
+  instance reaches the Display phase, the same embargo
+  `confsubmissions_submission.status` syncing already respects. A decision
+  recorded while already in Display phase notifies immediately
+  (`record_decision()`); one made during Review phase is deferred (new
+  `confprogram_decision.notifiedtime` column tracks this) and sent in one
+  batch, alongside the existing status sync, the moment the instance switches
+  to Display (`api::send_pending_decision_notifications()`, called from
+  `view.php`'s phase-toggle handler). Each individual decision is its own
+  notifiable event: a submission waitlisted then later accepted generates two
+  separate notifications, not just one for the final state. `'resubmit'`
+  decisions are deliberately excluded (the request named only "accepted,
+  rejected, or waitlisted"). Organiser-editable template
+  (`notifications.php`, new `confprogram_notiftemplate` table,
+  `mod/confprogram:managenotifications` capability), mirroring
+  `mod_confsubmissions`'s own notification-template pattern.
+  **Bug caught and fixed live** (a real 500 on the actual "Switch to Display
+  phase" button, not just a theoretical risk): `message_send()` failing (e.g.
+  this environment's missing `sendmail` binary) could throw an uncaught
+  exception from inside `view.php`'s phase-toggle handler, which must not
+  emit any output/throw before its own `redirect()` call -- fixed by wrapping
+  `message_send()` in a try/catch in both this plugin's and
+  `mod_confsubmissions`'s notifier, so a best-effort notification failing to
+  send can never break the real action (a decision, a submission, a
+  withdrawal) that triggered it. 70/70 PHPUnit passing (was 64, plus 1
+  pre-existing unrelated skip), phpcs/moodlecheck clean, EN/JA lang parity
+  verified (139/139 keys), live-verified end-to-end via Playwright and a
+  direct DB check: a decision recorded in Review phase correctly deferred,
+  then correctly notified (and `notifiedtime` set) the instant Display phase
+  began.
 - Added a Japanese (`lang/ja/confprogram.php`) language pack, translating every
   string in `lang/en/confprogram.php` (verified live: every key present in both,
   no extras or omissions on either side).

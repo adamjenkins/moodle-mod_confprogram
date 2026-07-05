@@ -495,6 +495,17 @@ class api {
         $phase = $DB->get_field('confprogram', 'phase', ['id' => $confprogramid], MUST_EXIST);
         if ($phase === 'display') {
             self::sync_one_submission_status_to_confsubmissions($decision, $submissionid);
+
+            // Same Display-phase embargo as the status sync just above (user
+            // confirmed, 2026-07-05): a decision notification is never sent while
+            // still in Review phase. Decisions made during Review phase are notified
+            // later, in one batch, by send_pending_decision_notifications() when the
+            // organiser switches to Display -- see view.php's phase-toggle handler.
+            // Resubmit decisions are never notified at all (see notifier's docblock).
+            if (in_array($decision, \mod_confprogram\local\notifier::NOTIFIABLE_DECISIONS, true)) {
+                \mod_confprogram\local\notifier::notify_decision($confprogramid, $submissionid, $decision);
+                $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $id]);
+            }
         }
 
         return $id;
@@ -564,6 +575,43 @@ class api {
             if ($latest) {
                 self::sync_one_submission_status_to_confsubmissions($latest->decision, (int) $submissionid);
             }
+        }
+    }
+
+    /**
+     * Sends the deferred decision notification for every not-yet-notified
+     * accept/reject/waitlist decision on this confprogram instance -- called only
+     * when switching Review -> Display (see view.php's phase-toggle handler),
+     * alongside sync_submission_statuses_to_confsubmissions() above.
+     *
+     * Unlike that method (which only cares about a submission's CURRENT/latest
+     * decision), this notifies for EVERY individual not-yet-notified decision row:
+     * a submission waitlisted then later accepted should tell its speakers about
+     * both events, not just the final one -- each is a genuine status change worth
+     * knowing about.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @return void
+     */
+    public static function send_pending_decision_notifications(int $confprogramid): void {
+        global $DB;
+
+        [$insql, $params] = $DB->get_in_or_equal(\mod_confprogram\local\notifier::NOTIFIABLE_DECISIONS);
+        $params = array_merge([$confprogramid], $params);
+
+        $pending = $DB->get_records_select(
+            'confprogram_decision',
+            "confprogram = ? AND notifiedtime = 0 AND decision $insql",
+            $params
+        );
+
+        foreach ($pending as $decision) {
+            \mod_confprogram\local\notifier::notify_decision(
+                $confprogramid,
+                (int) $decision->submissionid,
+                $decision->decision
+            );
+            $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $decision->id]);
         }
     }
 

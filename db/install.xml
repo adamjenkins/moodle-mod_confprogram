@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confprogram/db" VERSION="2026070302" COMMENT="XMLDB file for Moodle mod/confprogram"
+<XMLDB PATH="mod/confprogram/db" VERSION="2026070503" COMMENT="XMLDB file for Moodle mod/confprogram"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -83,6 +83,7 @@
         <FIELD NAME="decision" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="accept, reject, resubmit or waitlist"/>
         <FIELD NAME="round" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Increments each time a resubmit cycle completes"/>
         <FIELD NAME="decidedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table; the user who made this decision"/>
+        <FIELD NAME="notifiedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the accept/reject/waitlist notification was sent to this submission's speakers, or 0 if not yet sent. A decision recorded during Review phase is deliberately left at 0 (not sent) until the instance switches to Display phase -- the same Display-phase embargo as the confsubmissions status sync above -- see api::record_decision()/send_pending_decision_notifications(). Resubmit decisions never send a notification at all and so are also left at 0 permanently"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>
       <KEYS>
@@ -137,6 +138,25 @@
         <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
         <KEY NAME="confprogram-fieldname" TYPE="unique" FIELDS="confprogram, fieldname"/>
       </KEYS>
+    </TABLE>
+    <TABLE NAME="confprogram_notiftemplate" COMMENT="Organiser-edited notification templates (email subject/body) for this instance's decision notification">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
+        <FIELD NAME="notiftype" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="Always 'decision' currently (a single notification type, unlike mod_confsubmissions's two) -- kept as its own column rather than a hardcoded single row per instance so a second notification type can be added later without a schema change"/>
+        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email subject, with embeddable placeholder fields (e.g. [[fullname]], [[submissiontitle]], [[decision]]); null/blank falls back to a built-in default"/>
+        <FIELD NAME="body" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email body, same placeholder syntax as subject; null/blank falls back to a built-in default"/>
+        <FIELD NAME="bodyformat" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Standard Moodle text-format field for the body column, same convention as this plugin's own introformat field"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="confprogram" TYPE="foreign" FIELDS="confprogram" REFTABLE="confprogram" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="confprogramtype" UNIQUE="true" FIELDS="confprogram, notiftype"/>
+      </INDEXES>
     </TABLE>
   </TABLES>
 </XMLDB>

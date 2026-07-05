@@ -91,6 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && optional_param('togglephase', 0, PA
     // sync_submission_statuses_to_confsubmissions()'s own docblock for the reasoning.
     if ($newphase === 'display') {
         api::sync_submission_statuses_to_confsubmissions((int) $confprogram->id);
+
+        // Same one-way-reveal timing as the status sync just above (user
+        // confirmed, 2026-07-05): every decision notification deferred while this
+        // instance was still in Review phase is sent now, in one batch.
+        api::send_pending_decision_notifications((int) $confprogram->id);
     }
 
     redirect($pageurl);
@@ -136,6 +141,14 @@ if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers'
         get_string('displaysettings', 'mod_confprogram'),
         ['class' => 'btn btn-outline-secondary btn-sm mr-2']
     );
+
+    if (has_capability('mod/confprogram:managenotifications', $context)) {
+        echo html_writer::link(
+            new moodle_url('/mod/confprogram/notifications.php', ['id' => $cm->id]),
+            get_string('managenotifications', 'mod_confprogram'),
+            ['class' => 'btn btn-outline-secondary btn-sm mr-2']
+        );
+    }
 
     // Persistent entry point to define/edit the review rubric at any time. Previously the
     // only path to grade/grading/manage.php was a warning notification shown inside a

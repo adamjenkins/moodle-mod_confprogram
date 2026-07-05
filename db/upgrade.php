@@ -167,5 +167,36 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070502, 'confprogram');
     }
 
+    if ($oldversion < 2026070503) {
+        // Notifications (user request, 2026-07-05): every speaker on a submission is
+        // notified when an accept/reject/waitlist decision is recorded, but -- per an
+        // explicit decision -- deferred until the instance reaches Display phase, the
+        // same embargo confsubmissions_submission.status syncing already respects (see
+        // api::record_decision()/send_pending_decision_notifications()).
+        $table = new xmldb_table('confprogram_decision');
+        $field = new xmldb_field('notifiedtime', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'decidedby');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        if (!$dbman->table_exists('confprogram_notiftemplate')) {
+            $table = new xmldb_table('confprogram_notiftemplate');
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('confprogram', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('notiftype', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('subject', XMLDB_TYPE_CHAR, '255', null, null, null, null);
+            $table->add_field('body', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $table->add_field('bodyformat', XMLDB_TYPE_INTEGER, '4', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('confprogram', XMLDB_KEY_FOREIGN, ['confprogram'], 'confprogram', ['id']);
+            $table->add_index('confprogramtype', XMLDB_INDEX_UNIQUE, ['confprogram', 'notiftype']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026070503, 'confprogram');
+    }
+
     return true;
 }

@@ -15,6 +15,12 @@ Operates in two phases, switchable in edit mode:
 
 - **Review phase**: assign reviewers (individually or via reviewer groups) to submissions, review using a rubric (built on Moodle's core advanced grading API), optionally blind (hiding submitter/reviewer identities from each other), flag panels/keynotes as "unvetted" (excluded from review), and record a final Accept/Reject/Resubmit/Waitlist decision. "Resubmit" reopens the submission for editing with reviewer feedback visible, for a second review round.
 - **Display phase**: a responsive, filterable, day-by-day list of accepted submissions with a "favourite" feature, syncing time/room/favourite state with mod_confscheduler. The list also accepts an optional `?trackid=X` query parameter (verified against this instance's own tracks before use) to filter to a single track -- the destination of mod_confscheduler's clickable track-pill badges.
+- Decision notifications: every speaker on a submission is notified (via Moodle's own core notification system, email on by default) when an Accept/Reject/Waitlist decision is made -- but only once the instance reaches Display phase, the same embargo the accepted/rejected status sync to `mod_confsubmissions` already respects. Template is organiser-editable (`notifications.php`).
+
+## Architecture notes
+
+- **Decision notifications share the exact same Display-phase embargo as the `confsubmissions_submission.status` sync** -- a decision recorded during Review phase is deferred (`confprogram_decision.notifiedtime` tracks whether/when it was sent) and only actually sent, in one batch, the instant the instance switches to Display phase. A decision recorded when the instance is *already* in Display phase is notified immediately. Each individual decision is its own notifiable event -- a submission waitlisted then later accepted generates two separate notifications, not just one for the final state.
+- **A failed notification send can never break the real action that triggered it.** `message_send()` failing (e.g. the site's mail transport isn't configured) is caught and swallowed inside the notifier's own `send()` method, rather than allowed to propagate -- a real 500 was caught live on the "Switch to Display phase" button before this fix, since that handler must not throw/emit output before its own `redirect()` call.
 
 ## Requirements
 

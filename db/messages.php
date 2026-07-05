@@ -15,7 +15,12 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugin version metadata for mod_confprogram.
+ * Defines message providers (types of messages being sent) for mod_confprogram.
+ *
+ * A single provider covers accept/reject/waitlist decisions -- there is only one
+ * notification event in this plugin, unlike mod_confsubmissions's two. Defaults the
+ * email output ON alongside the popup output, same as mod_confsubmissions's own
+ * providers.
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -24,11 +29,11 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'mod_confprogram';
-$plugin->version   = 2026070503; // The current module version (Date: YYYYMMDDXX).
-$plugin->requires  = 2026042000; // Moodle 5.2.
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.0';
-$plugin->dependencies = [
-    'mod_confsubmissions' => ANY_VERSION,
+$messageproviders = [
+    'submissiondecision' => [
+        'defaults' => [
+            'popup' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+            'email' => MESSAGE_PERMITTED + MESSAGE_DEFAULT_ENABLED,
+        ],
+    ],
 ];
