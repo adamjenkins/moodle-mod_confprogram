@@ -23,6 +23,7 @@
  */
 
 $string['acceptedsubmissions'] = 'Accepted submissions';
+$string['alldays'] = 'All days';
 $string['anonymousreviewer'] = 'Reviewer {$a}';
 $string['assignreviewer'] = 'Assign reviewer';
 $string['assignreviewers'] = 'Assign reviewers';

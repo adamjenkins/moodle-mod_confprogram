@@ -36,7 +36,7 @@ final class api_test extends advanced_testcase {
      * Creates a course, a confsubmissions instance, and a confprogram instance
      * pointed at it.
      *
-     * @return array{0: \stdClass, 1: int} The course record and the confprogram instance id
+     * @return array{0: \stdClass, 1: int, 2: int} [$course, $confprogramid, $confsubmissionsid]
      */
     private function create_confprogram(): array {
         $course = $this->getDataGenerator()->create_course();
@@ -48,7 +48,31 @@ final class api_test extends advanced_testcase {
             'confsubmissionscmid' => $confsubmissionscm->id,
         ]);
 
-        return [$course, (int) $confprogram->id];
+        return [$course, (int) $confprogram->id, (int) $confsubmissions->id];
+    }
+
+    /**
+     * Creates a bare confsubmissions_submission row directly, belonging to the given
+     * confsubmissions instance.
+     *
+     * @param int $confsubmissionsid
+     * @return \stdClass
+     */
+    private function create_submission(int $confsubmissionsid): \stdClass {
+        global $DB;
+
+        $userid = $this->getDataGenerator()->create_user()->id;
+        $id = $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissionsid,
+            'userid'          => $userid,
+            'title'           => 'A Test Talk',
+            'abstract'        => 'Abstract text',
+            'status'          => 'submitted',
+            'timecreated'     => time(),
+            'timemodified'    => time(),
+        ]);
+
+        return $DB->get_record('confsubmissions_submission', ['id' => $id]);
     }
 
     /**
@@ -175,6 +199,130 @@ final class api_test extends advanced_testcase {
         $decision = api::get_decision(1);
         $this->assertSame('accept', $decision->decision);
         $this->assertSame(2, (int) $decision->round);
+    }
+
+    /**
+     * record_decision() does NOT push an Accept/Reject decision into
+     * mod_confsubmissions's own status column while still in Review phase -- the
+     * whole point of the Display-phase embargo is that a submitter's own "my
+     * submissions" view (which shows this status directly) must not reveal the
+     * decision early. This is the critical security property of the fix for the
+     * reported "status doesn't update" bug: it must not overcorrect into leaking
+     * embargoed decisions.
+     */
+    public function test_record_decision_does_not_sync_status_during_review_phase(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $this->assertSame('review', $DB->get_field('confprogram', 'phase', ['id' => $confprogramid]));
+
+        $submission = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        api::record_decision($confprogramid, (int) $submission->id, 'accept', 1, (int) $decider->id);
+
+        $this->assertSame('submitted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $submission->id]));
+    }
+
+    /**
+     * record_decision() DOES push the status immediately when the confprogram
+     * instance is already in Display phase (e.g. an organiser re-decides a
+     * submission after switching) -- both accept -> accepted and reject -> rejected.
+     */
+    public function test_record_decision_syncs_status_immediately_during_display_phase(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogramid]);
+
+        $accepted = $this->create_submission($confsubmissionsid);
+        $rejected = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        api::record_decision($confprogramid, (int) $accepted->id, 'accept', 1, (int) $decider->id);
+        api::record_decision($confprogramid, (int) $rejected->id, 'reject', 1, (int) $decider->id);
+
+        $this->assertSame('accepted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $accepted->id]));
+        $this->assertSame('rejected', $DB->get_field('confsubmissions_submission', 'status', ['id' => $rejected->id]));
+    }
+
+    /**
+     * record_decision() does not touch mod_confsubmissions status for Waitlist/
+     * Resubmit decisions, even in Display phase -- mod_confsubmissions has no
+     * corresponding status value for either yet (only submitted/accepted/rejected).
+     */
+    public function test_record_decision_does_not_sync_status_for_waitlist_or_resubmit(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogramid]);
+
+        $waitlisted = $this->create_submission($confsubmissionsid);
+        $resubmit = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        api::record_decision($confprogramid, (int) $waitlisted->id, 'waitlist', 1, (int) $decider->id);
+        api::record_decision($confprogramid, (int) $resubmit->id, 'resubmit', 1, (int) $decider->id);
+
+        $this->assertSame('submitted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $waitlisted->id]));
+        $this->assertSame('submitted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $resubmit->id]));
+    }
+
+    /**
+     * sync_submission_statuses_to_confsubmissions() (called when switching Review ->
+     * Display, see view.php) pushes each submission's LATEST decision for this
+     * confprogram instance -- a submission resubmitted then later accepted ends up
+     * 'accepted', not overwritten back by the earlier 'resubmit' round.
+     */
+    public function test_sync_submission_statuses_pushes_latest_decision_per_submission(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $decider = $this->getDataGenerator()->create_user();
+
+        $resubmitted = $this->create_submission($confsubmissionsid);
+        $rejected = $this->create_submission($confsubmissionsid);
+
+        api::record_decision($confprogramid, (int) $resubmitted->id, 'resubmit', 1, (int) $decider->id);
+        api::record_decision($confprogramid, (int) $resubmitted->id, 'accept', 2, (int) $decider->id);
+        api::record_decision($confprogramid, (int) $rejected->id, 'reject', 1, (int) $decider->id);
+
+        // Nothing synced yet: both decisions above were recorded while still in
+        // Review phase (create_confprogram()'s instance defaults to 'review').
+        $this->assertSame('submitted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $resubmitted->id]));
+
+        api::sync_submission_statuses_to_confsubmissions($confprogramid);
+
+        $this->assertSame('accepted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $resubmitted->id]));
+        $this->assertSame('rejected', $DB->get_field('confsubmissions_submission', 'status', ['id' => $rejected->id]));
+    }
+
+    /**
+     * sync_submission_statuses_to_confsubmissions() is instance-scoped: it only syncs
+     * decisions recorded by the confprogram instance it's called for, not any other
+     * instance's decision for the same (globally cross-plugin-shared) submissionid --
+     * the same instance-scoping property \mod_confprogram\local\rounds::
+     * get_latest_decision() already guarantees, which this method relies on.
+     */
+    public function test_sync_submission_statuses_is_scoped_to_the_confprogram_instance(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid1, $confsubmissionsid1] = $this->create_confprogram();
+        [, $confprogramid2] = $this->create_confprogram();
+        $decider = $this->getDataGenerator()->create_user();
+
+        $submission = $this->create_submission($confsubmissionsid1);
+        api::record_decision($confprogramid1, (int) $submission->id, 'accept', 1, (int) $decider->id);
+
+        // Sync the OTHER instance, which never decided this submission.
+        api::sync_submission_statuses_to_confsubmissions($confprogramid2);
+
+        $this->assertSame('submitted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $submission->id]));
     }
 
     /**

@@ -24,9 +24,11 @@
  * In the Display phase, renders the accepted-submissions list: title, and any other
  * configured fields (see \mod_confprogram\local\field_settings), a favourite-star
  * toggle, a day selector (only shown once mod_confscheduler schedule info exists for
- * at least one accepted submission -- see \mod_confprogram\local\schedule_info), and
- * a "favourites only" filter. Clicking a row opens the fuller field set in an
- * AJAX-loaded modal (amd/src/programlist.js).
+ * at least one accepted submission -- see \mod_confprogram\local\schedule_info) --
+ * including an "All days" option (user feedback, 2026-07-05) that renders every day's
+ * group as its own heading + table instead of one day at a time -- and a "favourites
+ * only" filter. Clicking a row opens the fuller field set in an AJAX-loaded modal
+ * (amd/src/programlist.js).
  *
  * A user holding mod/confprogram:managereviewers sees a phase-toggle control and a
  * link to displaysettings.php while in editing mode ("Turn editing on"), regardless
@@ -79,6 +81,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && optional_param('togglephase', 0, PA
         'phase'        => $newphase,
         'timemodified' => time(),
     ]);
+
+    // Switching Review -> Display lifts the embargo on every Accept/Reject decision
+    // made so far: push them into mod_confsubmissions's own status column now, since
+    // record_decision() deliberately did NOT do this at the time each was recorded
+    // (see that method's docblock for why). Deliberately no reverse action when
+    // toggling BACK to Review: once a status has been revealed to a submitter, this
+    // project treats that as a one-way reveal, not a fully symmetric embargo -- see
+    // sync_submission_statuses_to_confsubmissions()'s own docblock for the reasoning.
+    if ($newphase === 'display') {
+        api::sync_submission_statuses_to_confsubmissions((int) $confprogram->id);
+    }
 
     redirect($pageurl);
 }
@@ -266,43 +279,13 @@ if ($confprogram->phase === 'review') {
     $daykeys = array_keys($groups);
     $showdayselector = !($daykeys === ['unscheduled']);
 
-    if ($showdayselector) {
-        $default = ($selectedday !== '' && isset($groups[$selectedday]))
-            ? $selectedday
-            : display_list::default_day_key($groups);
-
-        $options = [];
-        foreach ($daykeys as $key) {
-            $options[$key] = $key === 'unscheduled'
-                ? get_string('unscheduled', 'mod_confprogram')
-                : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
+    // Renders one day's (or the whole flat list's) rows as a single table. Shared by
+    // the single-day path below and the "All days" path (user feedback, 2026-07-05),
+    // which calls this once per day instead of once for a single selected day.
+    $rendertable = function (array $rows) use ($listfields, $cm, $canfavourite, $USER) {
+        if (!$rows) {
+            return false;
         }
-
-        echo html_writer::start_tag('form', [
-            'method' => 'get',
-            'action' => $pageurl->out_omit_querystring(),
-            'class'  => 'form-inline mb-3',
-        ]);
-        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
-        if ($favouritesonly) {
-            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'favouritesonly', 'value' => 1]);
-        }
-        echo html_writer::tag('label', get_string('day', 'mod_confprogram'), ['for' => 'confprogram-day', 'class' => 'mr-2']);
-        echo html_writer::select($options, 'day', $default, false, ['id' => 'confprogram-day', 'class' => 'mr-2']);
-        echo html_writer::empty_tag('input', [
-            'type'  => 'submit',
-            'value' => get_string('showday', 'mod_confprogram'),
-            'class' => 'btn btn-secondary btn-sm',
-        ]);
-        echo html_writer::end_tag('form');
-
-        $rows = $groups[$default] ?? [];
-    } else {
-        $rows = $decorated;
-    }
-
-    if ($rows) {
-        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
 
         $table = new html_table();
         $table->attributes['class'] = 'generaltable confprogram-list-table';
@@ -367,6 +350,70 @@ if ($confprogram->phase === 'review') {
         }
 
         echo html_writer::table($table);
+        return true;
+    };
+
+    // All-days view (user feedback, 2026-07-05): every day's group rendered as its own
+    // heading + table, one after another, instead of a single day at a time. A plain
+    // local variable, not a global define() -- only ever read within this file.
+    $alldayskey = 'all';
+    $isalldays = false;
+
+    if ($showdayselector) {
+        $default = ($selectedday !== '' && ($selectedday === $alldayskey || isset($groups[$selectedday])))
+            ? $selectedday
+            : display_list::default_day_key($groups);
+        $isalldays = ($default === $alldayskey);
+
+        $options = [$alldayskey => get_string('alldays', 'mod_confprogram')];
+        foreach ($daykeys as $key) {
+            $options[$key] = $key === 'unscheduled'
+                ? get_string('unscheduled', 'mod_confprogram')
+                : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
+        }
+
+        echo html_writer::start_tag('form', [
+            'method' => 'get',
+            'action' => $pageurl->out_omit_querystring(),
+            'class'  => 'form-inline mb-3',
+        ]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+        if ($favouritesonly) {
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'favouritesonly', 'value' => 1]);
+        }
+        echo html_writer::tag('label', get_string('day', 'mod_confprogram'), ['for' => 'confprogram-day', 'class' => 'mr-2']);
+        echo html_writer::select($options, 'day', $default, false, ['id' => 'confprogram-day', 'class' => 'mr-2']);
+        echo html_writer::empty_tag('input', [
+            'type'  => 'submit',
+            'value' => get_string('showday', 'mod_confprogram'),
+            'class' => 'btn btn-secondary btn-sm',
+        ]);
+        echo html_writer::end_tag('form');
+
+        $rows = $isalldays ? [] : ($groups[$default] ?? []);
+    } else {
+        $rows = $decorated;
+    }
+
+    if ($isalldays) {
+        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
+        $anyrendered = false;
+        foreach ($daykeys as $key) {
+            $heading = $key === 'unscheduled'
+                ? get_string('unscheduled', 'mod_confprogram')
+                : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
+            echo $OUTPUT->heading($heading, 4, 'mod_confprogram-day-heading');
+            $anyrendered = $rendertable($groups[$key]) || $anyrendered;
+        }
+        echo html_writer::end_tag('div');
+        if ($anyrendered) {
+            $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');
+        } else {
+            echo $OUTPUT->notification(get_string('noacceptedsubmissions', 'mod_confprogram'), 'info');
+        }
+    } else if ($rows) {
+        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
+        $rendertable($rows);
         echo html_writer::end_tag('div');
 
         $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');

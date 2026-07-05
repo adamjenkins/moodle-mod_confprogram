@@ -147,5 +147,25 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070305, 'confprogram');
     }
 
+    if ($oldversion < 2026070502) {
+        // Status-sync bug fix (user feedback, 2026-07-05): mod_confsubmissions's
+        // confsubmissions_submission.status was never updated on Accept/Reject --
+        // see classes/api.php::record_decision()'s docblock and changelog.md for the
+        // full fix. That fix is forward-looking only (it hooks the moment a decision
+        // is recorded, and the moment phase switches Review -> Display): it does
+        // nothing for a site that already has confprogram instances sitting in
+        // Display phase with pre-existing Accept/Reject decisions from before this
+        // fix existed -- those submissions' statuses would stay stuck at 'submitted'
+        // forever without this one-time backfill. Safe to re-run (set_status() is
+        // idempotent) and cheap (only instances already in Display phase are
+        // touched).
+        $displayconfprogramids = $DB->get_fieldset_select('confprogram', 'id', 'phase = :phase', ['phase' => 'display']);
+        foreach ($displayconfprogramids as $confprogramid) {
+            \mod_confprogram\api::sync_submission_statuses_to_confsubmissions((int) $confprogramid);
+        }
+
+        upgrade_mod_savepoint(true, 2026070502, 'confprogram');
+    }
+
     return true;
 }

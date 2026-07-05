@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **Bug fix** (user feedback, 2026-07-05): "the status of a submission in
+  confsubmissions doesn't appear to be updated when it gets accepted or rejected."
+  Confirmed: `record_decision()` only ever wrote to `confprogram_decision`, never
+  back to `mod_confsubmissions`'s own `confsubmissions_submission.status` — so a
+  submitter's own "my submissions" view always showed "Submitted", regardless of any
+  decision. Fixed with a new `mod_confsubmissions\api::set_status()` call, but
+  **carefully phase-gated, not unconditional**: syncing status the moment a decision
+  is recorded would leak an Accept/Reject decision to the submitter during Review
+  phase, before an organiser switches to Display — exactly the embargo this project's
+  Display-phase gating exists to enforce (see `RELATIONS.md`). `record_decision()`
+  now only syncs immediately if the instance is already in Display phase; a decision
+  recorded during Review phase is synced later, in one batch, by a new
+  `api::sync_submission_statuses_to_confsubmissions()`, called from `view.php`'s
+  phase-toggle handler exactly when switching Review → Display. Waitlist/Resubmit
+  decisions deliberately don't change status yet — `mod_confsubmissions` has no
+  corresponding status value for either (only submitted/accepted/rejected), and this
+  fix specifically targets the reported accepted/rejected case. New tests cover: no
+  leak during Review phase, immediate sync during Display phase, waitlist/resubmit
+  leaving status untouched, latest-decision-wins across multiple rounds, and
+  instance-scoping (one confprogram instance's sync never touches a submission only
+  decided by a different instance). **Also added a one-time `db/upgrade.php` backfill
+  step** (`2026070502`): confirmed live on the demo site itself that this exact bug had
+  already left real submissions stuck at `status = 'submitted'` despite an Accept
+  decision in a confprogram instance already sitting in Display phase — the
+  forward-looking fix above does nothing for that already-existing case (it only hooks
+  the moment a decision is recorded and the moment phase switches), so the upgrade step
+  runs `sync_submission_statuses_to_confsubmissions()` once for every confprogram
+  instance already in Display phase, backfilling exactly this situation.
 - **Critical fix** (found via live bug-hunt testing, 2026-07-05): the Display-phase
   accepted-submissions list, its AJAX detail modal, and the review page all fatally
   errored (`Call to undefined method mod_confsubmissions\api::get_enabled_fieldnames()`)

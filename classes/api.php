@@ -16,6 +16,9 @@
 
 namespace mod_confprogram;
 
+use mod_confprogram\local\rounds;
+use mod_confsubmissions\api as submissions_api;
+
 /**
  * Public integration surface for the Conference Program (vetting) workflow.
  *
@@ -467,7 +470,7 @@ class api {
     ): int {
         global $DB;
 
-        return $DB->insert_record('confprogram_decision', (object) [
+        $id = $DB->insert_record('confprogram_decision', (object) [
             'confprogram'  => $confprogramid,
             'submissionid' => $submissionid,
             'decision'     => $decision,
@@ -475,6 +478,93 @@ class api {
             'decidedby'    => $decidedby,
             'timecreated'  => time(),
         ]);
+
+        // Keep mod_confsubmissions's own confsubmissions_submission.status in sync
+        // with Accept/Reject decisions -- but ONLY if this confprogram instance is
+        // already in Display phase right now. A submitter's own "my submissions" view
+        // in mod_confsubmissions shows this status directly, and the whole point of
+        // the Display-phase embargo (see RELATIONS.md) is that accept/reject decisions
+        // stay invisible to submitters until an organiser explicitly switches phase.
+        // decisions.php (the only current caller of this method) only permits
+        // recording a decision during Review phase in the first place, so this branch
+        // is currently unreachable in practice -- kept anyway because this method,
+        // not any one caller's own gating, is the actual contract (see RELATIONS.md's
+        // "no shared library" section). Decisions made during Review phase are synced
+        // later, in one batch, by sync_submission_statuses_to_confsubmissions() when
+        // the organiser switches to Display -- see view.php's phase-toggle handler.
+        $phase = $DB->get_field('confprogram', 'phase', ['id' => $confprogramid], MUST_EXIST);
+        if ($phase === 'display') {
+            self::sync_one_submission_status_to_confsubmissions($decision, $submissionid);
+        }
+
+        return $id;
+    }
+
+    /**
+     * Maps a decision to a mod_confsubmissions status and writes it, if that decision
+     * has a corresponding status there. Waitlist/Resubmit decisions deliberately do
+     * NOT change status: mod_confsubmissions has no corresponding status value for
+     * either yet (only submitted/accepted/rejected exist) -- introducing one is a
+     * separately-scoped follow-up, since this fix specifically addresses the reported
+     * "accepted or rejected" case.
+     *
+     * @param string $decision One of accept, reject, resubmit, waitlist
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @return void
+     */
+    private static function sync_one_submission_status_to_confsubmissions(string $decision, int $submissionid): void {
+        if ($decision === 'accept') {
+            submissions_api::set_status($submissionid, 'accepted');
+        } else if ($decision === 'reject') {
+            submissions_api::set_status($submissionid, 'rejected');
+        }
+    }
+
+    /**
+     * Pushes every submission's current Accept/Reject decision state for this
+     * confprogram instance into mod_confsubmissions's own status column. Called only
+     * when switching Review -> Display (see view.php's phase-toggle handler): any
+     * decisions made while still in Review phase are deliberately NOT synced at the
+     * moment they're recorded (record_decision() above), so this is what actually
+     * lifts the embargo for them, in one batch, the instant Display phase begins.
+     *
+     * Known limitation (moodle-reviewer, 2026-07-05), same class of issue as
+     * \mod_confprogram\api::is_favourited() not being confprogram-instance-scoped (see
+     * RELATIONS.md): confsubmissions_submission.status is a single shared column, not
+     * itself instance-scoped, so if the same globally-unique submissionid is ever
+     * legitimately decided by two different confprogram instances (possible --
+     * nothing prevents two instances sharing a confsubmissionscmid), whichever
+     * instance syncs last wins and silently overwrites the other's already-synced
+     * status. Not a phase-embargo leak (each write only ever happens once its OWN
+     * instance is genuinely in Display phase) -- a same-submitter cross-instance
+     * data-integrity quirk, left undocumented-but-unfixed here for the same reason
+     * is_favourited()'s was: a real fix needs per-(confprogram, submission) status
+     * tracking, a larger design change out of scope for this bug fix.
+     *
+     * Also note: there is deliberately no reverse sync if phase is later toggled back
+     * from Display to Review -- once revealed, a status stays revealed. This project
+     * treats the Display-phase reveal as one-way per decision, not a fully symmetric,
+     * re-enterable embargo; see view.php's phase-toggle handler.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @return void
+     */
+    public static function sync_submission_statuses_to_confsubmissions(int $confprogramid): void {
+        global $DB;
+
+        $submissionids = $DB->get_fieldset_select(
+            'confprogram_decision',
+            'DISTINCT submissionid',
+            'confprogram = :confprogramid',
+            ['confprogramid' => $confprogramid]
+        );
+
+        foreach ($submissionids as $submissionid) {
+            $latest = rounds::get_latest_decision($confprogramid, (int) $submissionid);
+            if ($latest) {
+                self::sync_one_submission_status_to_confsubmissions($latest->decision, (int) $submissionid);
+            }
+        }
     }
 
     /**
