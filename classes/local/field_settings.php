@@ -22,10 +22,23 @@ use mod_confsubmissions\api as submissions_api;
  * Display-phase per-field visibility configuration (confprogram_fieldsetting).
  *
  * "Available fields" for an instance are the fixed set (title, abstract, track,
- * speakers) plus whatever optional fields are enabled on the linked
- * mod_confsubmissions instance. Visibility (show in list / show in modal) is
- * configured per confprogram instance via displaysettings.php and stored as one
- * confprogram_fieldsetting row per field.
+ * speakers) plus whatever optional fields exist on the linked mod_confsubmissions
+ * instance. Visibility (show in list / show in modal) is configured per confprogram
+ * instance via displaysettings.php and stored as one confprogram_fieldsetting row per
+ * field.
+ *
+ * Field keys (Revision round 1 follow-up, 2026-07-05 -- fixing a cross-plugin
+ * contract break): a fixed field is keyed by its own name ('title', 'abstract', etc.),
+ * which is stable and has its own lang string. An optional mod_confsubmissions field is
+ * keyed by OPTIONAL_FIELD_PREFIX . its confsubmissions_field id (e.g. 'opt5'), NOT by
+ * its name -- since mod_confsubmissions moved to a fully dynamic, organiser-defined
+ * field system (see that plugin's commit introducing confsubmissions_field.name/type),
+ * a field's name is now free text (not unique, not a fixed vocabulary with its own lang
+ * string, and renamable), so it can no longer double as a stable identifier the way it
+ * could when only three fixed-name optional fields existed. This module and
+ * field_formatter.php are the only two places that need to know about this encoding;
+ * every caller of get_available_fields()/get_visible_fieldnames() still just gets back
+ * opaque string keys to store/pass through and hand to field_formatter for display.
  *
  * Nothing here writes to the database except upsert(): the defaults documented on
  * get_settings_with_defaults() are applied in memory only, at render time, so that
@@ -41,19 +54,42 @@ class field_settings {
     /** @var string[] The fixed fields every mod_confsubmissions instance has. */
     public const FIXED_FIELDS = ['title', 'abstract', 'track', 'speakers'];
 
+    /** @var string Prefix distinguishing an optional mod_confsubmissions field's key (e.g. 'opt5') from a fixed field's own key -- see this class's docblock. */
+    public const OPTIONAL_FIELD_PREFIX = 'opt';
+
     /** @var string[] Fixed fields shown in the list by default, before any explicit save. */
     private const DEFAULT_LIST_FIELDS = ['title', 'track', 'speakers'];
 
     /**
-     * Returns the available fields for an instance: the fixed set plus enabled optional
-     * fields, in a stable order (fixed fields first, then optional fields in their
-     * configured sort order).
+     * Returns the available fields for an instance: the fixed set plus every optional
+     * field configured on the linked mod_confsubmissions instance, in a stable order
+     * (fixed fields first, then optional fields in their configured sort order).
      *
      * @param int $confsubmissionsid The mod_confsubmissions instance id
-     * @return string[] Field names
+     * @return string[] Field keys -- see this class's docblock for the encoding
      */
     public static function get_available_fields(int $confsubmissionsid): array {
-        return array_merge(self::FIXED_FIELDS, submissions_api::get_enabled_fieldnames($confsubmissionsid));
+        $optionalkeys = array_map(
+            fn($field) => self::OPTIONAL_FIELD_PREFIX . $field->id,
+            array_values(submissions_api::get_fields($confsubmissionsid))
+        );
+
+        return array_merge(self::FIXED_FIELDS, $optionalkeys);
+    }
+
+    /**
+     * Decodes the confsubmissions_field id encoded in an optional-field key (e.g.
+     * 'opt5' -> 5).
+     *
+     * @param string $fieldkey A field key as returned by get_available_fields()
+     * @return int|null The field id, or null if $fieldkey is one of FIXED_FIELDS (not an optional field)
+     */
+    public static function optional_fieldid_from_key(string $fieldkey): ?int {
+        if (!str_starts_with($fieldkey, self::OPTIONAL_FIELD_PREFIX)) {
+            return null;
+        }
+
+        return (int) substr($fieldkey, strlen(self::OPTIONAL_FIELD_PREFIX));
     }
 
     /**

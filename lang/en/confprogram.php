@@ -54,6 +54,7 @@ $string['decisionreport'] = 'Decision report';
 $string['decisionsaved'] = 'Decision saved.';
 $string['defaultmaxreviews'] = 'Default max reviews per reviewer';
 $string['defaultmaxreviews_help'] = 'The maximum number of reviews a single reviewer may complete per round in this instance. 0 means unlimited. This can be overridden for an individual reviewer via a confprogram_reviewermax record.';
+$string['deletedfield'] = '(deleted field)';
 $string['displaysettings'] = 'Display field settings';
 $string['displaysettingssaved'] = 'Display settings saved.';
 $string['editmysubmission'] = 'Edit my submission';

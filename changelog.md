@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- **Critical fix** (found via live bug-hunt testing, 2026-07-05): the Display-phase
+  accepted-submissions list, its AJAX detail modal, and the review page all fatally
+  errored (`Call to undefined method mod_confsubmissions\api::get_enabled_fieldnames()`)
+  on any site where the linked `mod_confsubmissions` instance uses its (now-only)
+  dynamic, organiser-defined optional-field system -- that method was removed when
+  `mod_confsubmissions` migrated off the old fixed three-checkbox model, and this
+  plugin was never updated to match, a cross-plugin contract break of exactly the
+  kind `RELATIONS.md` warns about. Fixed by reworking `classes/local/field_settings.php`
+  and `classes/local/field_formatter.php` to key optional fields by their
+  `confsubmissions_field` id (`field_settings::OPTIONAL_FIELD_PREFIX . $fieldid`, e.g.
+  `'opt5'`) instead of by name -- a field's organiser-chosen name is now free text, not
+  a fixed, unique, lang-string-backed vocabulary, so it can no longer double as a
+  stable key. `field_formatter::get_label()` now uses the field's own name directly as
+  its label (instead of a `get_string('field_' . $fieldname, ...)` lookup that could
+  never have resolved for an arbitrary organiser-typed name) and falls back to a new
+  `deletedfield` string if the field has since been deleted. `review.php`'s own
+  optional-field rendering loop (which called the same removed method directly, plus
+  had an independent second bug reading submitted values by the wrong array key) was
+  fixed the same way. This subsystem had zero PHPUnit coverage before this fix --
+  `tests/local/field_settings_test.php` and `tests/local/field_formatter_test.php`
+  are new. **`moodle-reviewer` caught a real High-severity follow-on bug in the fix
+  itself**: a confprogram instance that had already saved `displaysettings.php`
+  *before* its linked `mod_confsubmissions` instance migrated has leftover
+  `confprogram_fieldsetting` rows keyed by the old raw field names, which no longer
+  match anything -- left in place, these are not harmlessly ignored, they'd silently
+  hide every optional field an organiser had previously made visible (since "this
+  instance has any fieldsetting row" flips `get_settings_with_defaults()`'s default
+  from "show" to "hide" for anything unmatched). Fixed with a new `db/upgrade.php`
+  step (`2026070305`) that deletes exactly those stale rows, restoring the documented
+  fresh-instance defaults instead of a silent regression.
 - Revision round 1 (small, narrowly-scoped addition requested by
   `mod_confscheduler`, 2026-07-03): the Display-phase accepted-submissions
   list (`view.php`) now accepts an optional `?trackid=X` query parameter,

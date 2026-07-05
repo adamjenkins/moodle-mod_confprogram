@@ -23,10 +23,11 @@ use mod_confsubmissions\api as submissions_api;
  * (the accepted-submissions list and the submission detail modal), shared so the two
  * do not duplicate the track/speaker lookup logic.
  *
- * Field labels are deliberately sourced from mod_confsubmissions's own language file
- * (title, abstract, track, speakers, field_<name>) rather than duplicated here, since
- * mod_confsubmissions already owns those strings and mod_confprogram already depends
- * on it.
+ * A fixed field's label is sourced from mod_confsubmissions's own language file
+ * (title, abstract, track, speakers) since mod_confsubmissions already owns those
+ * strings and mod_confprogram already depends on it. An optional field's label is its
+ * own organiser-chosen name (free text, not a lang string -- see field_settings.php's
+ * docblock for why this changed from the old fixed-vocabulary field_<name> lookup).
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -36,13 +37,24 @@ class field_formatter {
     /**
      * Returns the display label for a field.
      *
-     * @param string $fieldname One of field_settings::FIXED_FIELDS, or an optional fieldname
+     * @param string $fieldkey A field key as returned by field_settings::get_available_fields()
      * @return string
      */
-    public static function get_label(string $fieldname): string {
-        $stringkey = in_array($fieldname, field_settings::FIXED_FIELDS, true) ? $fieldname : 'field_' . $fieldname;
+    public static function get_label(string $fieldkey): string {
+        if (in_array($fieldkey, field_settings::FIXED_FIELDS, true)) {
+            return get_string($fieldkey, 'mod_confsubmissions');
+        }
 
-        return get_string($stringkey, 'mod_confsubmissions');
+        $fieldid = field_settings::optional_fieldid_from_key($fieldkey);
+        $field = $fieldid !== null ? submissions_api::get_field($fieldid) : false;
+
+        // A field's own name IS its label now (organiser free text, not a lang-string
+        // lookup); '(deleted field)' is a defensive fallback for a field that has been
+        // deleted from mod_confsubmissions since $fieldkey was resolved from a live
+        // get_available_fields() call -- not expected to be reachable in practice
+        // (every current caller derives $fieldkey from that same call immediately
+        // beforehand) but cheaper to handle gracefully than to assume.
+        return $field ? format_string($field->name, true, ['escape' => false]) : get_string('deletedfield', 'mod_confprogram');
     }
 
     /**
@@ -50,11 +62,11 @@ class field_formatter {
      * caller is responsible for escaping (e.g. via a Mustache {{ }} tag), since this
      * value may end up in either a server-rendered page or an AJAX-returned modal.
      *
-     * @param string $fieldname One of field_settings::FIXED_FIELDS, or an optional fieldname
+     * @param string $fieldkey A field key as returned by field_settings::get_available_fields()
      * @param \stdClass $submission The confsubmissions_submission record
      * @return string The formatted value, or '' if the field has no value for this submission
      */
-    public static function format_value(string $fieldname, \stdClass $submission): string {
+    public static function format_value(string $fieldkey, \stdClass $submission): string {
         global $DB;
 
         // Note: format_string() (below) HTML-entity-escapes by default, which would violate this method's
@@ -63,7 +75,7 @@ class field_formatter {
         // escape => false keeps multilang filtering while returning plain text.
         $formatopts = ['escape' => false];
 
-        switch ($fieldname) {
+        switch ($fieldkey) {
             case 'title':
                 return format_string($submission->title, true, $formatopts);
 
@@ -92,8 +104,12 @@ class field_formatter {
                 return implode(', ', $names);
 
             default:
+                $fieldid = field_settings::optional_fieldid_from_key($fieldkey);
+                if ($fieldid === null) {
+                    return '';
+                }
                 $values = submissions_api::get_optional_field_values((int) $submission->id);
-                return (string) ($values[$fieldname] ?? '');
+                return (string) ($values[$fieldid] ?? '');
         }
     }
 }

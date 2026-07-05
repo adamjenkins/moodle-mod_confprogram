@@ -225,13 +225,20 @@ if (!empty($submission->trackid)) {
 
 echo html_writer::tag('div', format_text($submission->abstract, FORMAT_PLAIN), ['class' => 'mb-3']);
 
+// Every organiser-defined optional field is shown here unconditionally, regardless of
+// the Display-phase show-in-list/show-in-modal visibility matrix (classes/local/
+// field_settings.php) -- that matrix only governs what the public Display-phase list
+// surfaces; a reviewer here always sees everything. Fields are identified by their
+// confsubmissions_field id, not name: mod_confsubmissions's fields are organiser-free-text
+// (not a fixed lang-string vocabulary), so a field's own name is used directly as its
+// label rather than looked up via get_string().
 $fieldvalues = submissions_api::get_optional_field_values($submissionid);
-foreach (submissions_api::get_enabled_fieldnames($confsubmissionscm->instance) as $fieldname) {
-    if (($fieldvalues[$fieldname] ?? '') === '') {
+foreach (submissions_api::get_fields($confsubmissionscm->instance) as $field) {
+    $value = $fieldvalues[$field->id] ?? '';
+    if ($value === '') {
         continue;
     }
-    echo html_writer::tag('p', html_writer::tag('strong', get_string('field_' . $fieldname, 'mod_confsubmissions') . ': ')
-        . s($fieldvalues[$fieldname]));
+    echo html_writer::tag('p', html_writer::tag('strong', format_string($field->name) . ': ') . s($value));
 }
 
 echo $OUTPUT->heading(get_string('review', 'mod_confprogram'), 3);

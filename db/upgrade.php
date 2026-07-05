@@ -104,5 +104,48 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070302, 'confprogram');
     }
 
+    if ($oldversion < 2026070305) {
+        // Optional-field-key encoding change (2026-07-05, fixing a cross-plugin
+        // contract break -- see classes/local/field_settings.php's docblock and
+        // changelog.md): confprogram_fieldsetting.fieldname now stores
+        // OPTIONAL_FIELD_PREFIX . fieldid (e.g. 'opt5') for an optional field,
+        // instead of the field's own (now organiser-free-text, non-unique,
+        // renamable) name.
+        //
+        // A confprogram instance that had already saved displaysettings.php BEFORE
+        // its linked mod_confsubmissions instance migrated to the dynamic-field
+        // system has rows keyed by the old raw field names, which no longer match
+        // anything get_available_fields() returns. Left in place, these are NOT
+        // harmlessly ignored: get_settings_with_defaults() treats "this instance has
+        // ANY fieldsetting row at all" as "no more fresh-instance defaults, treat
+        // anything unmatched as hidden" -- so every optional field an organiser had
+        // previously made visible on the Display-phase list/modal would silently
+        // disappear (no error, just vanish) the instant the site migrates. Found by
+        // a moodle-reviewer pass on the field-key fix itself, not by manual testing.
+        // Deleting the stale rows restores the documented "no rows yet" defaults for
+        // those fields instead of this silent regression.
+        $prefix = \mod_confprogram\local\field_settings::OPTIONAL_FIELD_PREFIX;
+        $fixedfields = \mod_confprogram\local\field_settings::FIXED_FIELDS;
+        $optionalkeypattern = '/^' . preg_quote($prefix, '/') . '[0-9]+$/';
+
+        $stalerowids = [];
+        $rs = $DB->get_recordset('confprogram_fieldsetting');
+        foreach ($rs as $record) {
+            $isfixed = in_array($record->fieldname, $fixedfields, true);
+            $isoptionalkey = (bool) preg_match($optionalkeypattern, $record->fieldname);
+            if (!$isfixed && !$isoptionalkey) {
+                $stalerowids[] = $record->id;
+            }
+        }
+        $rs->close();
+
+        if ($stalerowids) {
+            [$insql, $params] = $DB->get_in_or_equal($stalerowids, SQL_PARAMS_QM);
+            $DB->delete_records_select('confprogram_fieldsetting', "id $insql", $params);
+        }
+
+        upgrade_mod_savepoint(true, 2026070305, 'confprogram');
+    }
+
     return true;
 }
