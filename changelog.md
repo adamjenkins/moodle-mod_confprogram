@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a Japanese (`lang/ja/confprogram.php`) language pack, translating every
+  string in `lang/en/confprogram.php` (verified live: every key present in both,
+  no extras or omissions on either side).
 - **Bug fix** (user feedback, 2026-07-05): "the status of a submission in
   confsubmissions doesn't appear to be updated when it gets accepted or rejected."
   Confirmed: `record_decision()` only ever wrote to `confprogram_decision`, never
