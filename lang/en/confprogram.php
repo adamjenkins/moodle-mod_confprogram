@@ -158,6 +158,7 @@ $string['savedecision'] = 'Save decision';
 $string['selectall'] = 'Select all';
 $string['selectgroup'] = 'Select a reviewer group...';
 $string['selectreviewer'] = 'Select a reviewer...';
+$string['selectsubmission'] = 'Select {$a}';
 $string['setupreviewform'] = 'Set up the review form';
 $string['showallsubmissions'] = 'Show all submissions';
 $string['showday'] = 'Show';

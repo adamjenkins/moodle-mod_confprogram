@@ -72,7 +72,7 @@ const wireBulkApply = (root, strings) => {
         const decisionSelect = root.querySelector('[name=bulkdecision]');
         const checked = root.querySelectorAll('.mod_confprogram-row-checkbox:checked');
 
-        if (!decisionSelect.value || checked.length === 0) {
+        if (!decisionSelect || !decisionSelect.value || checked.length === 0) {
             return;
         }
 

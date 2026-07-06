@@ -158,6 +158,7 @@ $string['savedecision'] = '判定を保存';
 $string['selectall'] = 'すべて選択';
 $string['selectgroup'] = '査読者グループを選択...';
 $string['selectreviewer'] = '査読者を選択...';
+$string['selectsubmission'] = '{$a} を選択';
 $string['setupreviewform'] = '査読フォームを設定する';
 $string['showallsubmissions'] = 'すべての応募を表示';
 $string['showday'] = '表示';

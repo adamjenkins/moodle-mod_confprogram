@@ -214,6 +214,7 @@ echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 
 echo html_writer::start_tag('div', ['class' => 'mod_confprogram-bulk-toolbar form-inline mb-3']);
+echo html_writer::label(get_string('makedecision', 'mod_confprogram'), 'menubulkdecision', false, ['class' => 'sr-only']);
 echo html_writer::select(
     $decisionoptions,
     'bulkdecision',
@@ -287,7 +288,10 @@ foreach ($decorated as $row) {
     ]);
 
     $table->data[] = [
-        html_writer::checkbox('submissionids[]', $submission->id, false, '', ['class' => 'mod_confprogram-row-checkbox']),
+        html_writer::checkbox('submissionids[]', $submission->id, false, '', [
+            'class'      => 'mod_confprogram-row-checkbox',
+            'aria-label' => get_string('selectsubmission', 'mod_confprogram', format_string($submission->title)),
+        ]),
         format_string($submission->title),
         field_formatter::get_track_pill_html($submission),
         $row->round,
