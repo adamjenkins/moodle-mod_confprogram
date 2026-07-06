@@ -32,6 +32,7 @@
 require_once('../../config.php');
 require_once($CFG->dirroot . '/mod/confprogram/lib.php');
 
+use mod_confprogram\api;
 use mod_confprogram\form\notiftemplate_form;
 use mod_confprogram\local\notifier;
 
@@ -94,6 +95,18 @@ if ($form->is_cancelled()) {
     } else {
         $record->timecreated = $now;
         $DB->insert_record('confprogram_notiftemplate', $record);
+    }
+
+    // Re-enabling the master switch must actually deliver any decision that was
+    // recorded (and correctly skipped) while it was off -- flipping the checkbox
+    // alone does not call send_pending_decision_notifications(); only view.php's
+    // Review-to-Display phase-toggle handler otherwise does, which never runs
+    // again once an instance is already in Display phase. Only meaningful once
+    // decisions are actually revealed (Display phase); in Review phase nothing is
+    // ever pending regardless of the switch, since notify_decision() is never
+    // called until phase is Display.
+    if (!empty($data->notificationsenabled) && $confprogram->phase === 'display') {
+        \mod_confprogram\api::send_pending_decision_notifications((int) $confprogram->id);
     }
 
     redirect($pageurl, get_string('notiftemplatesaved', 'mod_confprogram'), null, \core\output\notification::NOTIFY_SUCCESS);

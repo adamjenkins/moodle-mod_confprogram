@@ -123,7 +123,6 @@ $string['privacy:metadata:confprogram_assignment:timecreated'] = 'The time the a
 $string['privacy:metadata:confprogram_decision'] = 'The accept/reject/resubmit/waitlist call made on a submission.';
 $string['privacy:metadata:confprogram_decision:decidedby'] = 'The ID of the user who made the decision.';
 $string['privacy:metadata:confprogram_decision:decision'] = 'The decision made (accept, reject, resubmit or waitlist).';
-$string['privacy:metadata:confprogram_decision:notifiedtime'] = 'The time the decision notification was sent to the submission\'s speakers, if it has been sent yet (an operational record of whether/when the notification was dispatched, not personal data about the decision itself).';
 $string['privacy:metadata:confprogram_decision:round'] = 'The review round this decision belongs to.';
 $string['privacy:metadata:confprogram_decision:timecreated'] = 'The time the decision was made.';
 $string['privacy:metadata:confprogram_favourite'] = 'A submission a user has favourited during the Display phase.';

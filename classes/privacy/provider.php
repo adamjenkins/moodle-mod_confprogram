@@ -77,7 +77,13 @@ class provider implements
             'decision'     => 'privacy:metadata:confprogram_decision:decision',
             'round'        => 'privacy:metadata:confprogram_decision:round',
             'timecreated'  => 'privacy:metadata:confprogram_decision:timecreated',
-            'notifiedtime' => 'privacy:metadata:confprogram_decision:notifiedtime',
+            // Notifiedtime is deliberately NOT declared here (moodle-reviewer finding,
+            // 2026-07-06): it is an operational record of whether/when the schedule-
+            // change notification was dispatched, not personal data about the decision
+            // itself -- same reasoning that already excludes confprogram_notiftemplate
+            // entirely (see this class's docblock). A field declared here but never
+            // exported/deleted alongside it would be a worse inconsistency than simply
+            // not declaring it.
         ], 'privacy:metadata:confprogram_decision');
 
         $collection->add_database_table('confprogram_favourite', [

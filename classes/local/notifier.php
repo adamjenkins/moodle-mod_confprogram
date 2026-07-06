@@ -150,7 +150,7 @@ class notifier {
                 continue;
             }
 
-            $speakercontext = $context + ['fullname' => fullname($touser)];
+            $speakercontext = $context + ['fullname' => format_string(fullname($touser))];
 
             self::send(
                 $touser,
