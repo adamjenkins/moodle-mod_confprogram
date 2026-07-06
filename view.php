@@ -246,9 +246,14 @@ if ($confprogram->phase === 'review') {
     }
 
     $availablefields = field_settings::get_available_fields((int) $confsubmissionscm->instance);
+    $allvisiblelistfields = field_settings::get_visible_fieldnames((int) $confprogram->id, $availablefields, 'list');
+    $showtrackpill = in_array('track', $allvisiblelistfields, true);
     $listfields = array_values(array_diff(
-        field_settings::get_visible_fieldnames((int) $confprogram->id, $availablefields, 'list'),
-        ['title'] // Title is always rendered as the row's clickable link; never duplicated as a plain field.
+        $allvisiblelistfields,
+        // Title is always rendered as the row's clickable link, never duplicated as a plain
+        // field; track gets its own coloured-pill cell below (built from trusted HTML, not
+        // run through s() like every other field in this loop) instead of a plain-text cell.
+        ['title', 'track']
     ));
 
     $accepted = display_list::get_accepted_submissions((int) $confprogram->id, (int) $confsubmissionscm->instance);
@@ -295,7 +300,7 @@ if ($confprogram->phase === 'review') {
     // Renders one day's (or the whole flat list's) rows as a single table. Shared by
     // the single-day path below and the "All days" path (user feedback, 2026-07-05),
     // which calls this once per day instead of once for a single selected day.
-    $rendertable = function (array $rows) use ($listfields, $cm, $canfavourite, $USER) {
+    $rendertable = function (array $rows) use ($listfields, $showtrackpill, $cm, $canfavourite, $USER) {
         if (!$rows) {
             return false;
         }
@@ -303,6 +308,9 @@ if ($confprogram->phase === 'review') {
         $table = new html_table();
         $table->attributes['class'] = 'generaltable confprogram-list-table';
         $head = [get_string('title', 'mod_confsubmissions')];
+        if ($showtrackpill) {
+            $head[] = get_string('track', 'mod_confsubmissions');
+        }
         foreach ($listfields as $fieldname) {
             $head[] = field_formatter::get_label($fieldname);
         }
@@ -322,6 +330,12 @@ if ($confprogram->phase === 'review') {
             $titlecell = new html_table_cell($titlelink);
             $titlecell->attributes['data-label'] = get_string('title', 'mod_confsubmissions');
             $data[] = $titlecell;
+
+            if ($showtrackpill) {
+                $trackcell = new html_table_cell(field_formatter::get_track_pill_html($submission));
+                $trackcell->attributes['data-label'] = get_string('track', 'mod_confsubmissions');
+                $data[] = $trackcell;
+            }
 
             foreach ($listfields as $fieldname) {
                 $value = field_formatter::format_value($fieldname, $submission);
