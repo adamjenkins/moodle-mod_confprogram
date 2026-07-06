@@ -179,7 +179,7 @@ echo html_writer::empty_tag('input', ['type' => 'submit', 'value' => get_string(
 echo html_writer::end_tag('form');
 
 $filters = [];
-if ($filtertrack !== '') {
+if ($filtertrack) {
     $filters['trackid'] = $filtertrack;
 }
 $submissions = submissions_api::get_submissions_for_instance($confsubmissionscm->instance, $filters);
@@ -196,6 +196,8 @@ if (!$decorated) {
     exit;
 }
 
+// Independently check both capabilities: a :decide holder is not guaranteed to also hold
+// :viewidentity (e.g. a coordinator role that decides but should still see reviews blind).
 $canviewidentity = identity::can_view_identity($context);
 
 $decisionoptions = [];
