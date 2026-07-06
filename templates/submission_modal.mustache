@@ -21,19 +21,26 @@
 
     Context variables required for this template:
     * see classes/output/submission_modal.php
+    * trackpill (string, only when hastrackpill is true) - TRUSTED HTML pre-built by
+      field_formatter::get_track_pill_html(), rendered via a raw {{{ }}} tag below; never
+      pass free-text/user-controlled content through this key
 
     Example context (json):
     {
         "scheduletext": "Not yet scheduled",
         "hasfields": true,
         "fields": [
-            {"label": "Track", "value": "Track A"},
             {"label": "Abstract", "value": "This talk is about..."}
-        ]
+        ],
+        "hastrackpill": true,
+        "trackpill": "<span class=\"mod_confprogram-track-pill\">Track A</span>"
     }
 }}
 <div class="mod_confprogram-submission-modal">
     <p class="text-muted confprogram-schedule">{{scheduletext}}</p>
+    {{#hastrackpill}}
+    <p class="mod_confprogram-submission-modal-track">{{{trackpill}}}</p>
+    {{/hastrackpill}}
     {{#hasfields}}
     <dl class="row">
         {{#fields}}

@@ -20,6 +20,7 @@ namespace mod_confprogram\external;
 
 use advanced_testcase;
 use mod_confprogram\api;
+use mod_confsubmissions\api as submissions_api;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
@@ -156,5 +157,31 @@ final class get_submission_detail_test extends advanced_testcase {
 
         $this->expectException(\invalid_parameter_exception::class);
         get_submission_detail::execute($cmid, $submissionid);
+    }
+
+    /**
+     * When 'track' is visible in the modal (the default), its value renders as
+     * the coloured pill span, not a plain "Track: X" label/value row.
+     */
+    public function test_track_renders_as_a_pill_not_a_plain_field(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$course, $cmid, $submissionid, $confprogramid] = $this->create_fixture('display');
+        $confsubmissionsid = $DB->get_field('confsubmissions_submission', 'confsubmissions', ['id' => $submissionid]);
+        $trackid = submissions_api::add_track((int) $confsubmissionsid, 'Data Science', '#3366cc');
+        $DB->set_field('confsubmissions_submission', 'trackid', $trackid, ['id' => $submissionid]);
+        $decider = $this->getDataGenerator()->create_user();
+        api::record_decision($confprogramid, $submissionid, 'accept', 1, (int) $decider->id);
+
+        $viewer = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->setUser($viewer);
+
+        $result = get_submission_detail::execute($cmid, $submissionid);
+
+        $this->assertStringContainsString('mod_confprogram-track-pill', $result['html']);
+        $this->assertStringContainsString('background-color:#3366cc', $result['html']);
+        // The generic label/value row for 'track' must NOT also appear.
+        $this->assertStringNotContainsString('>Track<', $result['html']);
     }
 }

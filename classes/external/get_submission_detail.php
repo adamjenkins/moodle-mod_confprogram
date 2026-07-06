@@ -113,13 +113,14 @@ class get_submission_detail extends external_api {
         }
 
         $availablefields = field_settings::get_available_fields((int) $confsubmissionscm->instance);
+        $allvisiblemodalfields = field_settings::get_visible_fieldnames((int) $confprogram->id, $availablefields, 'modal');
         // Title is excluded here even if configured showinmodal: it is always used as the
         // modal's own heading (below), so listing it again as a field would be a duplicate --
-        // matching the same exclusion view.php applies to the list's title column.
-        $modalfields = array_values(array_diff(
-            field_settings::get_visible_fieldnames((int) $confprogram->id, $availablefields, 'modal'),
-            ['title']
-        ));
+        // matching the same exclusion view.php applies to the list's title column. Track is
+        // excluded for the same reason 'title' is: it gets its own trusted-HTML pill slot
+        // (see field_formatter::get_track_pill_html()'s docblock), not a plain escaped
+        // label/value row like every other field here.
+        $modalfields = array_values(array_diff($allvisiblemodalfields, ['title', 'track']));
 
         $fields = [];
         foreach ($modalfields as $fieldname) {
@@ -130,9 +131,13 @@ class get_submission_detail extends external_api {
             $fields[] = ['label' => field_formatter::get_label($fieldname), 'value' => $value];
         }
 
+        $trackpill = in_array('track', $allvisiblemodalfields, true)
+            ? field_formatter::get_track_pill_html($submission)
+            : null;
+
         $scheduletext = schedule_info::format_for_display(schedule_info::get_for_submission((int) $submission->id));
 
-        $modal = new submission_modal($fields, $scheduletext);
+        $modal = new submission_modal($fields, $scheduletext, $trackpill);
 
         return [
             'title' => format_string($submission->title),

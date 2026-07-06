@@ -41,14 +41,26 @@ class submission_modal implements renderable, templatable {
     protected $scheduletext;
 
     /**
+     * @var string|null Trusted HTML for the track pill (see
+     * field_formatter::get_track_pill_html()), or null when 'track' is not
+     * configured visible in the modal for this instance. Rendered via a raw
+     * {{{ }}} tag in the template -- the one deliberate exception to this
+     * class's otherwise-fully-escaped fields, for the same reason 'title' is
+     * also handled outside the generic fields loop.
+     */
+    protected $trackpill;
+
+    /**
      * Constructor.
      *
      * @param array $fields The visible (showinmodal) fields, each ['label' => ..., 'value' => ...]
      * @param string $scheduletext The formatted schedule text
+     * @param string|null $trackpill Trusted HTML for the track pill, or null to omit it
      */
-    public function __construct(array $fields, string $scheduletext) {
+    public function __construct(array $fields, string $scheduletext, ?string $trackpill = null) {
         $this->fields = $fields;
         $this->scheduletext = $scheduletext;
+        $this->trackpill = $trackpill;
     }
 
     /**
@@ -59,9 +71,11 @@ class submission_modal implements renderable, templatable {
      */
     public function export_for_template(renderer_base $output): array {
         return [
-            'scheduletext' => $this->scheduletext,
-            'hasfields'    => !empty($this->fields),
-            'fields'       => $this->fields,
+            'scheduletext'  => $this->scheduletext,
+            'hasfields'     => !empty($this->fields),
+            'fields'        => $this->fields,
+            'hastrackpill'  => $this->trackpill !== null,
+            'trackpill'     => $this->trackpill,
         ];
     }
 }
