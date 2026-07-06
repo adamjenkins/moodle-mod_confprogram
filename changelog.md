@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- Bug-fix round (2026-07-06): three user-reported bugs, all root-caused before
+  fixing and independently re-verified live.
+  1. **Numeric submit buttons instead of language strings**: five
+     `<input type="submit">` buttons in `assign.php` (remove-assignment,
+     assign-individual, assign-group) and `unvetted.php` (mark/unmark unvetted)
+     used the row's own id as their `value` attribute -- for a submit input,
+     `value` is both the submitted data AND the visible label, so the button
+     literally displayed a number. Fixed by converting all five to
+     `<button type="submit" name="X" value="$id">{{label}}</button>`, which lets
+     the submitted value and the displayed label differ; no POST-handling logic
+     changed. New `assigngroup` lang string (EN+JA), the only one of the five
+     without an existing short string to reuse.
+  2. **`review.php` crashed on both Cancel and a successful Submit** (reproduced
+     live with a full stack trace via Playwright): `echo $OUTPUT->header()` and
+     page rendering happened before the review form's `is_cancelled()`/
+     `get_data()` checks and their `redirect()` calls. `redirect()` cannot
+     perform a real HTTP redirect once output has started, so it fatally erred
+     with "You should really redirect before you start page output". Fixed by
+     moving all cancel/submit/redirect handling above the `header()` call,
+     matching the pattern every sibling page in this plugin (`assign.php`,
+     `decisions.php`, `unvetted.php`) already used.
+  3. **Track colour never reached a "pill" badge anywhere in this plugin** --
+     track was plain text everywhere (the Display-phase list, the submission
+     detail modal, `review.php`, `assign.php`). New
+     `field_formatter::get_track_pill_html()` renders a coloured pill (mirroring
+     `mod_confscheduler`'s identical `.mod_confscheduler-track-pill` visual
+     language via a new `.mod_confprogram-track-pill` class), deliberately
+     separate from `format_value('track', ...)` since that method's contract is
+     "never returns HTML" (both the list and the modal escape its output) --
+     the fix follows the exact precedent already used for the `title` field:
+     excluded from the generic per-field loop, rendered in its own dedicated
+     slot, still gated by the same show-in-list/show-in-modal visibility
+     setting.
+  - 78/78 PHPUnit passing (was 74, +4 new), phpcs/moodlecheck clean, all four
+    fixes independently re-verified live via Playwright.
+
 - User request (2026-07-06): "Also make sure backup/restore/reset all works fine
   with all plugins." `FEATURE_BACKUP_MOODLE2` flipped to true; new
   `backup/moodle2/*.php` step classes cover every table. Also correctly declares
