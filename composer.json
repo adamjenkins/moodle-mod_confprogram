@@ -1,0 +1,10 @@
+{
+    "name": "adamjenkins/moodle-mod_confprogram",
+    "description": "Conference Program - a Moodle activity module that runs submissions through a reviewer vetting workflow, then displays the accepted programme to attendees.",
+    "type": "moodle-mod",
+    "require": {
+        "moodle/moodle": "^5.2",
+        "moodle/composer-installer": "*"
+    },
+    "license": "GPL-3.0-or-later"
+}
