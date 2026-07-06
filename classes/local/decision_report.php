@@ -17,7 +17,6 @@
 namespace mod_confprogram\local;
 
 use mod_confprogram\api;
-use mod_confsubmissions\api as submissions_api;
 
 /**
  * Data layer behind decisions.php's table and assign.php's "resubmitted"
