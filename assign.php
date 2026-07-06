@@ -34,6 +34,7 @@ require_once($CFG->dirroot . '/mod/confprogram/lib.php');
 require_once($CFG->libdir . '/grouplib.php');
 
 use mod_confprogram\api;
+use mod_confprogram\local\field_formatter;
 use mod_confprogram\local\reviewer_workload;
 use mod_confprogram\local\rounds;
 use mod_confsubmissions\api as submissions_api;
@@ -244,7 +245,7 @@ foreach ($submissions as $submission) {
     $table->data[] = [
         $checkbox,
         format_string($submission->title),
-        $submission->trackid ? ($tracknames[$submission->trackid] ?? '-') : get_string('notrack', 'mod_confsubmissions'),
+        field_formatter::get_track_pill_html($submission),
         $currentcell,
         $assigncell,
     ];

@@ -32,6 +32,7 @@ require_once($CFG->dirroot . '/grade/grading/lib.php');
 
 use mod_confprogram\api;
 use mod_confprogram\form\review_form;
+use mod_confprogram\local\field_formatter;
 use mod_confprogram\local\identity;
 use mod_confprogram\local\reviewer_workload;
 use mod_confprogram\local\rounds;
@@ -333,13 +334,8 @@ if ($canviewidentity) {
     echo $OUTPUT->notification(get_string('identityhidden', 'mod_confprogram'), 'info');
 }
 
-if (!empty($submission->trackid)) {
-    $track = $DB->get_record('confsubmissions_track', ['id' => $submission->trackid]);
-    if ($track) {
-        echo html_writer::tag('p', html_writer::tag('strong', get_string('track', 'mod_confsubmissions') . ': ')
-            . format_string($track->name));
-    }
-}
+echo html_writer::tag('p', html_writer::tag('strong', get_string('track', 'mod_confsubmissions') . ': ')
+    . field_formatter::get_track_pill_html($submission));
 
 echo html_writer::tag('div', format_text($submission->abstract, FORMAT_PLAIN), ['class' => 'mb-3']);
 
