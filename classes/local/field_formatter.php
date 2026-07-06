@@ -153,7 +153,12 @@ class field_formatter {
         // an auto-escaping sink downstream, which this trusted-HTML return value never is).
         $name = format_string($track->name, true);
         $style = '';
-        if (!empty($track->colour)) {
+        // Re-validate the hex shape here even though mod_confsubmissions\api::add_track()
+        // already enforces it at write time (self::validate_colour()) -- this method has an
+        // otherwise-implicit cross-plugin trust dependency on that upstream validation, and a
+        // malformed value must never reach a raw style="" attribute (moodle-reviewer finding,
+        // 2026-07-06).
+        if (!empty($track->colour) && preg_match('/^#[0-9a-fA-F]{6}$/', $track->colour)) {
             $textcolour = self::contrast_text_colour($track->colour);
             $style = "background-color:{$track->colour};color:{$textcolour}";
         }
