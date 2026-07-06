@@ -360,6 +360,32 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * count_favourites() returns the total number of distinct users who have
+     * favourited a submission.
+     */
+    public function test_count_favourites(): void {
+        $this->resetAfterTest();
+
+        [, $confprogramid] = $this->create_confprogram();
+        $userone = $this->getDataGenerator()->create_user();
+        $usertwo = $this->getDataGenerator()->create_user();
+
+        $this->assertSame(0, api::count_favourites(1));
+
+        api::add_favourite($confprogramid, 1, (int) $userone->id);
+        $this->assertSame(1, api::count_favourites(1));
+
+        api::add_favourite($confprogramid, 1, (int) $usertwo->id);
+        $this->assertSame(2, api::count_favourites(1));
+
+        // A DIFFERENT submission's count is unaffected.
+        $this->assertSame(0, api::count_favourites(2));
+
+        api::remove_favourite($confprogramid, 1, (int) $userone->id);
+        $this->assertSame(1, api::count_favourites(1));
+    }
+
+    /**
      * get_favourites() returns a user's favourites within a single confprogram
      * instance only, and add_favourite()/remove_favourite() do not affect other
      * users' favourites of the same submission.

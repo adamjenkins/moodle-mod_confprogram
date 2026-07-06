@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added `api::count_favourites()`, the total number of users who have
+  favourited a submission (not instance-scoped, matching `is_favourited()`'s
+  own existing signature/known limitation). Consumed by
+  `mod_confscheduler`'s new room-capacity overbooking warning (user request,
+  2026-07-05) -- see that plugin's own changelog for the full feature. 71/71
+  PHPUnit passing (was 70).
 - User feedback (2026-07-05): "on the submission being accepted, rejected, or
   waitlisted" a notification should be sent to every presenter. Added a
   decision notification, sent via Moodle's own core notification system

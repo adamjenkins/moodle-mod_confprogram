@@ -93,6 +93,24 @@ class api {
     }
 
     /**
+     * The total number of users who have favourited a submission, across every
+     * confprogram instance -- used by mod_confscheduler's room-capacity overbooking
+     * warning (user request, 2026-07-05). Not instance-scoped, matching
+     * is_favourited()'s own signature/known limitation just below (the same
+     * submissionid could theoretically be favourited under more than one confprogram
+     * instance; a real fix needs per-(confprogram, submission) tracking throughout,
+     * out of scope for this feature).
+     *
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @return int
+     */
+    public static function count_favourites(int $submissionid): int {
+        global $DB;
+
+        return $DB->count_records('confprogram_favourite', ['submissionid' => $submissionid]);
+    }
+
+    /**
      * Whether a user has favourited a submission.
      *
      * @param int $userid The user id
