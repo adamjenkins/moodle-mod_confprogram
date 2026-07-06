@@ -28,24 +28,27 @@
   not-yet-reassigned submission at once -- using the same
   `decision_report::filter_resubmitted()` shared by both pages.
 
-  Two real bugs found and fixed along the way: (1)
-  `optional_param('trackid', '', PARAM_INT)` coerces an empty GET value --
-  present whenever the filter form is submitted at all, even with "All
-  tracks" selected -- to `0`, not `''`; a strict `!== ''` guard then treated
-  that coerced `0` as a real filter, producing `WHERE trackid = 0` and
-  silently emptying the whole table. Fixed in `decisions.php` with a truthy
-  check in place of the strict-empty-string check, and, since `assign.php`'s
-  pre-existing track filter had the exact same bug (same `optional_param()`
-  call, same strict guard), fixed there too opportunistically in the same
-  pass. (2) a `moodle-reviewer` pass found two Medium accessibility issues,
-  both fixed: the bulk-decision `<select>` had no persistent accessible name
-  once a real option was chosen (its only label was the placeholder option
-  text) -- fixed with a visually-hidden `<label>`; and the per-row
-  checkboxes had no `aria-label` distinguishing one row from another for
-  screen-reader table navigation -- fixed with one built from each
-  submission's title. A related Low finding was also fixed:
-  `decisions.js`'s bulk-decision `<select>` lookup had no null-guard,
-  inconsistent with the apply-button check three lines above it.
+  Two real bugs found and fixed along the way:
+
+  1. **Silent "All tracks" filter bug**: `optional_param('trackid', '',
+     PARAM_INT)` coerces an empty GET value -- present whenever the filter
+     form is submitted at all, even with "All tracks" selected -- to `0`,
+     not `''`; a strict `!== ''` guard then treated that coerced `0` as a
+     real filter, producing `WHERE trackid = 0` and silently emptying the
+     whole table. Fixed in `decisions.php` with a truthy check in place of
+     the strict-empty-string check, and, since `assign.php`'s pre-existing
+     track filter had the exact same bug (same `optional_param()` call,
+     same strict guard), fixed there too opportunistically in the same
+     pass.
+  2. **Accessibility findings from a `moodle-reviewer` pass**: two Medium
+     issues, both fixed -- the bulk-decision `<select>` had no persistent
+     accessible name once a real option was chosen (its only label was the
+     placeholder option text), fixed with a visually-hidden `<label>`; and
+     the per-row checkboxes had no `aria-label` distinguishing one row from
+     another for screen-reader table navigation, fixed with one built from
+     each submission's title. A related Low finding was also fixed:
+     `decisions.js`'s bulk-decision `<select>` lookup had no null-guard,
+     inconsistent with the apply-button check three lines above it.
 
   12 new tests in `decision_report_test.php`, 90/90 PHPUnit passing (full
   suite), phpcs/moodlecheck clean, all behaviour independently re-verified
