@@ -52,4 +52,24 @@ final class decision_report {
         }
         return $result;
     }
+
+    /**
+     * Filters an already-decorated set down to a single decision-status bucket.
+     *
+     * @param array $decorated The id-keyed output of decorate_submissions()
+     * @param string $status '' (no filter), 'none' (no decision yet), or a decision value
+     * @return array The same id-keyed shape, filtered
+     */
+    public static function filter_by_decision_status(array $decorated, string $status): array {
+        if ($status === '') {
+            return $decorated;
+        }
+
+        return array_filter($decorated, function (\stdClass $row) use ($status): bool {
+            if ($status === 'none') {
+                return $row->latestdecision === null;
+            }
+            return $row->latestdecision !== null && $row->latestdecision->decision === $status;
+        });
+    }
 }

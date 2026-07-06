@@ -136,4 +136,66 @@ final class decision_report_test extends advanced_testcase {
         $this->assertSame('accept', $decorated[$submission1->id]->latestdecision->decision);
         $this->assertNull($decorated[$submission2->id]->latestdecision);
     }
+
+    /**
+     * An empty status filters nothing -- returns every row unchanged.
+     */
+    public function test_filter_by_decision_status_empty_returns_all(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $submission = $this->create_submission($confsubmissionsid);
+        $decorated = decision_report::decorate_submissions($confprogramid, [$submission->id => $submission]);
+
+        $filtered = decision_report::filter_by_decision_status($decorated, '');
+
+        $this->assertCount(1, $filtered);
+    }
+
+    /**
+     * 'none' keeps only submissions with no decision recorded at all.
+     */
+    public function test_filter_by_decision_status_none(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $undecided = $this->create_submission($confsubmissionsid);
+        $decided = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+        api::record_decision($confprogramid, (int) $decided->id, 'accept', 1, (int) $decider->id);
+
+        $decorated = decision_report::decorate_submissions($confprogramid, [
+            $undecided->id => $undecided,
+            $decided->id   => $decided,
+        ]);
+
+        $filtered = decision_report::filter_by_decision_status($decorated, 'none');
+
+        $this->assertCount(1, $filtered);
+        $this->assertArrayHasKey($undecided->id, $filtered);
+    }
+
+    /**
+     * A real decision value keeps only submissions whose latest decision matches it.
+     */
+    public function test_filter_by_decision_status_specific_decision(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $accepted = $this->create_submission($confsubmissionsid);
+        $rejected = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+        api::record_decision($confprogramid, (int) $accepted->id, 'accept', 1, (int) $decider->id);
+        api::record_decision($confprogramid, (int) $rejected->id, 'reject', 1, (int) $decider->id);
+
+        $decorated = decision_report::decorate_submissions($confprogramid, [
+            $accepted->id => $accepted,
+            $rejected->id => $rejected,
+        ]);
+
+        $filtered = decision_report::filter_by_decision_status($decorated, 'accept');
+
+        $this->assertCount(1, $filtered);
+        $this->assertArrayHasKey($accepted->id, $filtered);
+    }
 }
