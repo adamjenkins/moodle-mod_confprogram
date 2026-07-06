@@ -25,6 +25,7 @@
 $string['acceptedsubmissions'] = '採択された応募';
 $string['alldays'] = 'すべての日程';
 $string['anonymousreviewer'] = '査読者{$a}';
+$string['assigngroup'] = 'グループを割り当て';
 $string['assignreviewer'] = '査読者を割り当て';
 $string['assignreviewers'] = '査読者を割り当て';
 $string['backtoall'] = 'すべての応募に戻る';

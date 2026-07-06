@@ -25,6 +25,7 @@
 $string['acceptedsubmissions'] = 'Accepted submissions';
 $string['alldays'] = 'All days';
 $string['anonymousreviewer'] = 'Reviewer {$a}';
+$string['assigngroup'] = 'Assign group';
 $string['assignreviewer'] = 'Assign reviewer';
 $string['assignreviewers'] = 'Assign reviewers';
 $string['backtoall'] = 'Back to all submissions';

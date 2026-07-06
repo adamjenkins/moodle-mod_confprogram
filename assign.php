@@ -212,12 +212,11 @@ foreach ($submissions as $submission) {
             $group = $coursegroups[$assignment->reviewergroupid] ?? null;
             $label = $group ? get_string('reviewergroup', 'mod_confprogram', format_string($group->name)) : '-';
         }
-        $removebutton = html_writer::empty_tag('input', [
+        $removebutton = html_writer::tag('button', get_string('remove'), [
             'type'  => 'submit',
             'name'  => 'removeassignment',
             'value' => $assignment->id,
             'class' => 'btn btn-link btn-sm p-0 ml-2',
-            'title' => get_string('remove'),
         ]);
         $assignmentlines[] = html_writer::tag('span', s($label) . ' ' . $removebutton);
     }
@@ -231,7 +230,7 @@ foreach ($submissions as $submission) {
     }
     $assigncell = html_writer::select($reviewerselect, 'reviewerselect_' . $submission->id, 0, null)
         . ' '
-        . html_writer::empty_tag('input', [
+        . html_writer::tag('button', get_string('assignreviewer', 'mod_confprogram'), [
             'type'  => 'submit',
             'name'  => 'assignindividual',
             'value' => $submission->id,
@@ -260,7 +259,7 @@ if ($confprogram->groupreviewmode) {
         $groupoptions[$group->id] = format_string($group->name);
     }
     echo html_writer::select($groupoptions, 'groupselect', 0, null, ['class' => 'mr-2']);
-    echo html_writer::empty_tag('input', [
+    echo html_writer::tag('button', get_string('assigngroup', 'mod_confprogram'), [
         'type'  => 'submit',
         'name'  => 'assigngroup',
         'value' => 1,
