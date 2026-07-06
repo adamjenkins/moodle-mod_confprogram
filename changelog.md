@@ -24,9 +24,9 @@
   resubmitted submission) is replaced by a single bulk "Start a new round"
   link, shown only when at least one resubmit-decided submission exists. It
   lands on `assign.php`'s existing bulk-assign checkboxes via a new
-  `?resubmitted=1` filter mode, pre-filtered to every resubmit-decided,
-  not-yet-reassigned submission at once -- using the same
-  `decision_report::filter_resubmitted()` shared by both pages.
+  `?resubmitted=1` filter mode, pre-filtered to every resubmit-decided
+  submission at once -- using the same `decision_report::filter_resubmitted()`
+  shared by both pages.
 
   Two real bugs found and fixed along the way:
 

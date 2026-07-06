@@ -138,6 +138,38 @@ final class decision_report_test extends advanced_testcase {
     }
 
     /**
+     * A submission with a completed review for its current round has that
+     * review reflected in ->reviews -- the data source decisions.php's
+     * condensed "Reviews" column renders from.
+     */
+    public function test_decorate_submission_includes_completed_review(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $submission = $this->create_submission($confsubmissionsid);
+        $reviewer = $this->getDataGenerator()->create_user();
+
+        $DB->insert_record('confprogram_review', (object) [
+            'confprogram'       => $confprogramid,
+            'submissionid'      => $submission->id,
+            'reviewerid'        => $reviewer->id,
+            'round'             => 1,
+            'gradinginstanceid' => 1,
+            'grade'             => 7.5,
+            'timecreated'       => time(),
+            'timemodified'      => time(),
+        ]);
+
+        $decorated = decision_report::decorate_submissions($confprogramid, [$submission->id => $submission]);
+
+        $row = $decorated[$submission->id];
+        $this->assertCount(1, $row->reviews);
+        $this->assertSame((int) $reviewer->id, (int) $row->reviews[array_key_first($row->reviews)]->reviewerid);
+        $this->assertEqualsWithDelta(7.5, (float) $row->reviews[array_key_first($row->reviews)]->grade, 0.001);
+    }
+
+    /**
      * An empty status filters nothing -- returns every row unchanged.
      */
     public function test_filter_by_decision_status_empty_returns_all(): void {
