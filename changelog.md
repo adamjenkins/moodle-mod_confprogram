@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- User request (2026-07-06): "Also make sure backup/restore/reset all works fine
+  with all plugins." `FEATURE_BACKUP_MOODLE2` flipped to true; new
+  `backup/moodle2/*.php` step classes cover every table. Also correctly declares
+  `FEATURE_ADVANCED_GRADING` (this plugin always used core's Advanced Grading API
+  for rubric reviews, just never declared the feature) plus a new
+  `classes/grades/gradeitems.php` implementing core's `itemnumber_mapping`/
+  `advancedgrading_mapping` interfaces -- required for `\grading_manager` to
+  discover this plugin's `'review'` gradable area at all (discovered live: without
+  it, `get_available_areas()` returns null and core call sites like
+  `course/modlib.php` `foreach()` over it). Cross-activity references
+  (`confsubmissionscmid`, every `submissionid` column, and a review's
+  `gradinginstanceid`) are resolved in `after_restore()`, since restore order
+  across activities in the same course backup is not guaranteed until every
+  activity's main structure step has completed. Also fixed, found while building
+  this: `confprogram_delete_instance()` was missing `confprogram_review`/
+  `confprogram_notiftemplate` cleanup. New `confprogram_reset_userdata()`/
+  `_reset_course_form_definition()`/`_defaults()`: course reset deletes all
+  reviewer assignments, reviews, decisions, favourites, and unvetted flags,
+  switches phase back to Review, and clears this instance's `grading_instances`
+  rows (best-effort -- see README's "Architecture notes" for what's traded off);
+  Display-phase field settings and notification templates survive a reset
+  unchanged. Verified with a real `backup_controller`/`restore_controller` cycle
+  (`tests/backup/restore_confprogram_test.php`), including a genuine rubric
+  grading instance round-trip, not just a unit test of the stepslib classes.
+  74/74 PHPUnit passing (was 72, +2 new), phpcs/moodlecheck clean, EN/JA lang
+  parity verified (142/142 keys).
 - moodle-reviewer findings (2026-07-06), two fixes:
   1. `notifications.php`'s master-switch checkbox save did not flush any
      backlog of decisions that had been skipped while notifications were

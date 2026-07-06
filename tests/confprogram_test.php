@@ -90,7 +90,8 @@ final class confprogram_test extends advanced_testcase {
         require_once($CFG->dirroot . '/mod/confprogram/lib.php');
 
         $this->assertTrue(confprogram_supports(FEATURE_MOD_INTRO));
-        $this->assertFalse(confprogram_supports(FEATURE_BACKUP_MOODLE2));
+        $this->assertTrue(confprogram_supports(FEATURE_BACKUP_MOODLE2));
+        $this->assertTrue(confprogram_supports(FEATURE_ADVANCED_GRADING));
         $this->assertSame(MOD_PURPOSE_OTHER, confprogram_supports(FEATURE_MOD_PURPOSE));
         $this->assertNull(confprogram_supports('some_unknown_feature'));
     }
@@ -114,5 +115,59 @@ final class confprogram_test extends advanced_testcase {
         $cm = get_coursemodule_from_instance('confprogram', $confprogram->id);
 
         $this->assertSame('review', api::get_phase((int) $cm->id));
+    }
+
+    /**
+     * confprogram_reset_userdata() deletes reviewer assignments, reviews, decisions,
+     * favourites and unvetted flags, and switches the instance back to Review phase --
+     * but leaves instance configuration (fieldsettings) untouched.
+     */
+    public function test_reset_userdata_removes_workflow_data_and_resets_phase(): void {
+        $this->resetAfterTest();
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/confprogram/lib.php');
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $confsubmissionscm = get_coursemodule_from_instance('confsubmissions', $confsubmissions->id);
+        $confprogram = $this->getDataGenerator()->create_module('confprogram', [
+            'course'              => $course->id,
+            'confsubmissionscmid' => $confsubmissionscm->id,
+        ]);
+
+        $reviewer = $this->getDataGenerator()->create_user();
+        $decider = $this->getDataGenerator()->create_user();
+        $now = time();
+        $submissionid = (int) $DB->insert_record('confsubmissions_submission', (object) [
+            'confsubmissions' => $confsubmissions->id,
+            'userid'          => $reviewer->id,
+            'title'           => 'A Test Talk',
+            'abstract'        => 'Abstract text',
+            'status'          => 'submitted',
+            'timecreated'     => $now,
+            'timemodified'    => $now,
+        ]);
+
+        api::assign_reviewer((int) $confprogram->id, $submissionid, (int) $reviewer->id);
+        api::record_decision((int) $confprogram->id, $submissionid, 'accept', 1, (int) $decider->id);
+        $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogram->id]);
+
+        $DB->insert_record('confprogram_fieldsetting', (object) [
+            'confprogram' => $confprogram->id,
+            'fieldname'   => 'abstract',
+            'showinlist'  => 1,
+            'showinmodal' => 1,
+        ]);
+
+        $status = confprogram_reset_userdata((object) [
+            'courseid' => $course->id,
+            'reset_confprogram_reviews' => 1,
+        ]);
+
+        $this->assertNotEmpty($status);
+        $this->assertFalse($DB->record_exists('confprogram_assignment', ['confprogram' => $confprogram->id]));
+        $this->assertFalse($DB->record_exists('confprogram_decision', ['confprogram' => $confprogram->id]));
+        $this->assertTrue($DB->record_exists('confprogram_fieldsetting', ['confprogram' => $confprogram->id]));
+        $this->assertSame('review', $DB->get_field('confprogram', 'phase', ['id' => $confprogram->id]));
     }
 }
