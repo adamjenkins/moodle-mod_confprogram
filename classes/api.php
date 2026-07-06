@@ -521,8 +521,14 @@ class api {
             // organiser switches to Display -- see view.php's phase-toggle handler.
             // Resubmit decisions are never notified at all (see notifier's docblock).
             if (in_array($decision, \mod_confprogram\local\notifier::NOTIFIABLE_DECISIONS, true)) {
-                \mod_confprogram\local\notifier::notify_decision($confprogramid, $submissionid, $decision);
-                $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $id]);
+                // Only marked notified if a send was actually attempted (i.e. the
+                // instance's notificationsenabled master switch is on) -- leaving
+                // notifiedtime at 0 while disabled means a later re-enable still
+                // delivers this decision via send_pending_decision_notifications()
+                // rather than silently losing it (user request, 2026-07-06).
+                if (\mod_confprogram\local\notifier::notify_decision($confprogramid, $submissionid, $decision)) {
+                    $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $id]);
+                }
             }
         }
 
@@ -624,12 +630,14 @@ class api {
         );
 
         foreach ($pending as $decision) {
-            \mod_confprogram\local\notifier::notify_decision(
+            $sent = \mod_confprogram\local\notifier::notify_decision(
                 $confprogramid,
                 (int) $decision->submissionid,
                 $decision->decision
             );
-            $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $decision->id]);
+            if ($sent) {
+                $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $decision->id]);
+            }
         }
     }
 

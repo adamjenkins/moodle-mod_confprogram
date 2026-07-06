@@ -60,8 +60,9 @@ $form = new notiftemplate_form($pageurl, ['context' => $context]);
 
 $default = notifier::default_template();
 $form->set_data((object) [
-    'subject' => $existing->subject ?? $default['subject'],
-    'body'    => [
+    'notificationsenabled' => (bool) $confprogram->notificationsenabled,
+    'subject'              => $existing->subject ?? $default['subject'],
+    'body'                 => [
         'text'   => $existing->body ?? $default['body'],
         'format' => $existing->bodyformat ?? FORMAT_HTML,
     ],
@@ -71,6 +72,13 @@ if ($form->is_cancelled()) {
     redirect(new moodle_url('/mod/confprogram/view.php', ['id' => $cm->id]));
 } else if ($data = $form->get_data()) {
     $now = time();
+
+    $DB->update_record('confprogram', (object) [
+        'id'                   => $confprogram->id,
+        'notificationsenabled' => !empty($data->notificationsenabled) ? 1 : 0,
+        'timemodified'         => $now,
+    ]);
+
     $record = (object) [
         'confprogram'  => $confprogram->id,
         'notiftype'    => 'decision',

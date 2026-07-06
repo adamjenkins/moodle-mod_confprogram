@@ -204,6 +204,37 @@ final class notifier_test extends advanced_testcase {
     }
 
     /**
+     * When an instance's notificationsenabled master switch (user request,
+     * 2026-07-06) is off, a decision made while already in Display phase sends
+     * nothing and leaves notifiedtime at 0 -- re-enabling and calling
+     * send_pending_decision_notifications() then delivers it, since nothing was
+     * silently marked "notified" while disabled.
+     */
+    public function test_master_switch_disables_notification_and_leaves_it_pending(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram('display');
+        $DB->set_field('confprogram', 'notificationsenabled', 0, ['id' => $confprogramid]);
+
+        $speaker = $this->getDataGenerator()->create_user();
+        $submissionid = $this->create_submission_with_speaker($confsubmissionsid, $speaker);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $sink = $this->redirectMessages();
+        $decisionid = api::record_decision($confprogramid, $submissionid, 'accept', 1, (int) $decider->id);
+
+        $this->assertCount(0, $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision'));
+        $this->assertSame(0, (int) $DB->get_field('confprogram_decision', 'notifiedtime', ['id' => $decisionid]));
+
+        $DB->set_field('confprogram', 'notificationsenabled', 1, ['id' => $confprogramid]);
+        api::send_pending_decision_notifications($confprogramid);
+
+        $this->assertCount(1, $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision'));
+        $this->assertGreaterThan(0, (int) $DB->get_field('confprogram_decision', 'notifiedtime', ['id' => $decisionid]));
+    }
+
+    /**
      * get_template() falls back to default_template() when no
      * confprogram_notiftemplate row exists, and uses the configured row once one
      * does.

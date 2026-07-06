@@ -21,6 +21,7 @@ Operates in two phases, switchable in edit mode:
 
 - **Decision notifications share the exact same Display-phase embargo as the `confsubmissions_submission.status` sync** -- a decision recorded during Review phase is deferred (`confprogram_decision.notifiedtime` tracks whether/when it was sent) and only actually sent, in one batch, the instant the instance switches to Display phase. A decision recorded when the instance is *already* in Display phase is notified immediately. Each individual decision is its own notifiable event -- a submission waitlisted then later accepted generates two separate notifications, not just one for the final state.
 - **A failed notification send can never break the real action that triggered it.** `message_send()` failing (e.g. the site's mail transport isn't configured) is caught and swallowed inside the notifier's own `send()` method, rather than allowed to propagate -- a real 500 was caught live on the "Switch to Display phase" button before this fix, since that handler must not throw/emit output before its own `redirect()` call.
+- **A per-instance notifications master switch** (`confprogram.notificationsenabled`, default on) overrides the decision notification template. `notifier::notify_decision()` returns a bool so callers only mark a decision's `notifiedtime` once a send was actually attempted -- a decision made while disabled stays pending (not silently marked "notified"), so re-enabling and calling `send_pending_decision_notifications()` still delivers it.
 
 ## Requirements
 

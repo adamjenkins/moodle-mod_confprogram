@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confprogram/db" VERSION="2026070503" COMMENT="XMLDB file for Moodle mod/confprogram"
+<XMLDB PATH="mod/confprogram/db" VERSION="2026070601" COMMENT="XMLDB file for Moodle mod/confprogram"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -15,6 +15,7 @@
         <FIELD NAME="blindreview" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether submitter/reviewer identities are hidden from each other during review"/>
         <FIELD NAME="groupreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether reviewers are assigned as members of reviewer groups rather than individually"/>
         <FIELD NAME="defaultmaxreviews" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Default per-reviewer cap on assigned reviews in group-review mode; 0 means unlimited"/>
+        <FIELD NAME="notificationsenabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Master switch (user request, 2026-07-06): when 0, this instance's notifier never sends the decision notification, regardless of the template configured. Defaults to 1 (enabled) so existing instances keep their current behaviour"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>

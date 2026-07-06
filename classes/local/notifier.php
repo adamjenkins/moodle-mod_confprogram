@@ -111,19 +111,22 @@ class notifier {
      * @param int $confprogramid The confprogram instance id
      * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
      * @param string $decision One of self::NOTIFIABLE_DECISIONS
-     * @return void
+     * @return bool True if a send was attempted (the instance's master switch is on);
+     *         false if it was skipped (no confprogram/submission record, or
+     *         notificationsenabled is off). Callers use this to decide whether to mark
+     *         notifiedtime -- see api::record_decision()/send_pending_decision_notifications().
      */
-    public static function notify_decision(int $confprogramid, int $submissionid, string $decision): void {
+    public static function notify_decision(int $confprogramid, int $submissionid, string $decision): bool {
         global $DB;
 
         $confprogram = $DB->get_record('confprogram', ['id' => $confprogramid]);
-        if (!$confprogram) {
-            return;
+        if (!$confprogram || !$confprogram->notificationsenabled) {
+            return false;
         }
 
         $submission = submissions_api::get_submission($submissionid);
         if (!$submission) {
-            return;
+            return false;
         }
 
         $template = self::get_template($confprogramid);
@@ -157,6 +160,8 @@ class notifier {
                 (int) $confprogram->course
             );
         }
+
+        return true;
     }
 
     /**
