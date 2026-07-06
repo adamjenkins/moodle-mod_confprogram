@@ -122,19 +122,19 @@ foreach ($submissions as $submission) {
     $form .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
     $form .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     if ($isunvetted) {
-        $form .= html_writer::empty_tag('input', [
+        $form .= html_writer::tag('button', get_string('unmarkunvetted', 'mod_confprogram'), [
             'type'  => 'submit',
             'name'  => 'unmarkunvetted',
             'value' => $submission->id,
             'class' => 'btn btn-secondary btn-sm',
-        ]) . ' ' . get_string('unmarkunvetted', 'mod_confprogram');
+        ]);
     } else {
-        $form .= html_writer::empty_tag('input', [
+        $form .= html_writer::tag('button', get_string('markunvetted', 'mod_confprogram'), [
             'type'  => 'submit',
             'name'  => 'markunvetted',
             'value' => $submission->id,
             'class' => 'btn btn-secondary btn-sm',
-        ]) . ' ' . get_string('markunvetted', 'mod_confprogram');
+        ]);
     }
     $form .= html_writer::end_tag('form');
 
