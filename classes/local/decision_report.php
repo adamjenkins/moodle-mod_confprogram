@@ -72,4 +72,25 @@ final class decision_report {
             return $row->latestdecision !== null && $row->latestdecision->decision === $status;
         });
     }
+
+    /**
+     * Filters a raw (non-decorated) id-keyed submission set down to only
+     * those whose latest decision is 'resubmit'. Shared by decisions.php's
+     * "start a new round" bulk-link count and assign.php's ?resubmitted=1
+     * filter mode -- both need the identical set.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param array $submissions Id-keyed raw submission objects
+     * @return array The same id-keyed shape, filtered to resubmit-decided ones
+     */
+    public static function filter_resubmitted(int $confprogramid, array $submissions): array {
+        $result = [];
+        foreach ($submissions as $id => $submission) {
+            $latest = rounds::get_latest_decision($confprogramid, (int) $id);
+            if ($latest !== null && $latest->decision === 'resubmit') {
+                $result[$id] = $submission;
+            }
+        }
+        return $result;
+    }
 }

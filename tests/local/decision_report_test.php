@@ -198,4 +198,46 @@ final class decision_report_test extends advanced_testcase {
         $this->assertCount(1, $filtered);
         $this->assertArrayHasKey($accepted->id, $filtered);
     }
+
+    /**
+     * filter_resubmitted() keeps only submissions whose latest decision is
+     * 'resubmit', operating on raw (non-decorated) submissions.
+     */
+    public function test_filter_resubmitted_keeps_only_resubmit_decided(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $resubmitted = $this->create_submission($confsubmissionsid);
+        $accepted = $this->create_submission($confsubmissionsid);
+        $undecided = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+        api::record_decision($confprogramid, (int) $resubmitted->id, 'resubmit', 1, (int) $decider->id);
+        api::record_decision($confprogramid, (int) $accepted->id, 'accept', 1, (int) $decider->id);
+
+        $filtered = decision_report::filter_resubmitted($confprogramid, [
+            $resubmitted->id => $resubmitted,
+            $accepted->id    => $accepted,
+            $undecided->id   => $undecided,
+        ]);
+
+        $this->assertCount(1, $filtered);
+        $this->assertArrayHasKey($resubmitted->id, $filtered);
+        $this->assertSame($resubmitted->id, $filtered[$resubmitted->id]->id);
+    }
+
+    /**
+     * No resubmit-decided submissions in the input means an empty result, not an error.
+     */
+    public function test_filter_resubmitted_empty_when_none_match(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $accepted = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+        api::record_decision($confprogramid, (int) $accepted->id, 'accept', 1, (int) $decider->id);
+
+        $filtered = decision_report::filter_resubmitted($confprogramid, [$accepted->id => $accepted]);
+
+        $this->assertSame([], $filtered);
+    }
 }
