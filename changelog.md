@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+- User request (2026-07-06): redesign the Decision report as a filterable,
+  bulk-capable table. `decisions.php` is rewritten from per-submission cards
+  into a single `html_table` with track and decision-status filters (a plain
+  GET form, matching `assign.php`'s existing track-filter pattern) and a
+  row-checkbox column for bulk decisions -- pick a decision from a toolbar
+  dropdown, select any number of rows (or use a header "select all"
+  checkbox), and apply it to the whole batch in one POST, gated behind a
+  confirm dialog naming the chosen decision and how many submissions it will
+  touch. That confirm/select-all behaviour lives in a new
+  `amd/src/decisions.js` -- this plugin's first AMD module, everything else
+  here being plain server-rendered forms. Per-row single-decision controls
+  remain alongside the bulk toolbar for one-at-a-time use. All the new
+  server-side decorating/filtering/bulk-apply logic lives in a new
+  `classes/local/decision_report.php` (`decorate_submissions()`,
+  `filter_by_decision_status()`, `filter_resubmitted()`,
+  `apply_bulk_decision()`), covered by 12 new tests in
+  `tests/local/decision_report_test.php`.
+
+  The report's old per-row "start new review round" navigation (one link per
+  resubmitted submission) is replaced by a single bulk "Start a new round"
+  link, shown only when at least one resubmit-decided submission exists. It
+  lands on `assign.php`'s existing bulk-assign checkboxes via a new
+  `?resubmitted=1` filter mode, pre-filtered to every resubmit-decided,
+  not-yet-reassigned submission at once -- using the same
+  `decision_report::filter_resubmitted()` shared by both pages.
+
+  Two real bugs found and fixed along the way: (1)
+  `optional_param('trackid', '', PARAM_INT)` coerces an empty GET value --
+  present whenever the filter form is submitted at all, even with "All
+  tracks" selected -- to `0`, not `''`; a strict `!== ''` guard then treated
+  that coerced `0` as a real filter, producing `WHERE trackid = 0` and
+  silently emptying the whole table. Fixed in `decisions.php` with a truthy
+  check in place of the strict-empty-string check, and, since `assign.php`'s
+  pre-existing track filter had the exact same bug (same `optional_param()`
+  call, same strict guard), fixed there too opportunistically in the same
+  pass. (2) a `moodle-reviewer` pass found two Medium accessibility issues,
+  both fixed: the bulk-decision `<select>` had no persistent accessible name
+  once a real option was chosen (its only label was the placeholder option
+  text) -- fixed with a visually-hidden `<label>`; and the per-row
+  checkboxes had no `aria-label` distinguishing one row from another for
+  screen-reader table navigation -- fixed with one built from each
+  submission's title. A related Low finding was also fixed:
+  `decisions.js`'s bulk-decision `<select>` lookup had no null-guard,
+  inconsistent with the apply-button check three lines above it.
+
+  12 new tests in `decision_report_test.php`, 90/90 PHPUnit passing (full
+  suite), phpcs/moodlecheck clean, all behaviour independently re-verified
+  live via Playwright.
+
 - Bug-fix round (2026-07-06): three user-reported bugs, all root-caused before
   fixing and independently re-verified live.
   1. **Numeric submit buttons instead of language strings**: five
