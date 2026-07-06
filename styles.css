@@ -80,3 +80,13 @@
         color: #6c757d;
     }
 }
+
+.mod_confprogram-track-pill {
+    display: inline-block;
+    background: #3366cc;
+    color: #fff;
+    border-radius: 10px;
+    padding: 0 0.4rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}

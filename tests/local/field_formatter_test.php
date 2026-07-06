@@ -44,13 +44,14 @@ final class field_formatter_test extends advanced_testcase {
      * @param int $confsubmissionsid
      * @return \stdClass
      */
-    private function create_submission(int $confsubmissionsid): \stdClass {
+    private function create_submission(int $confsubmissionsid, ?int $trackid = null): \stdClass {
         global $DB;
 
         $userid = $this->getDataGenerator()->create_user()->id;
         $id = $DB->insert_record('confsubmissions_submission', (object) [
             'confsubmissions' => $confsubmissionsid,
             'userid'          => $userid,
+            'trackid'         => $trackid,
             'title'           => 'A Test Talk',
             'abstract'        => 'Abstract text',
             'status'          => 'submitted',
@@ -153,5 +154,63 @@ final class field_formatter_test extends advanced_testcase {
         $value = field_formatter::format_value(field_settings::OPTIONAL_FIELD_PREFIX . $fieldid, $submission);
 
         $this->assertSame('', $value);
+    }
+
+    /**
+     * A submission with a coloured track gets a pill with that colour as its
+     * background, and white text (the track's colour, #3366cc, is dark enough
+     * by the YIQ formula that white text is the correct contrast pick).
+     */
+    public function test_get_track_pill_html_with_colour(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $trackid = submissions_api::add_track((int) $confsubmissions->id, 'AI & Machine Learning', '#3366cc');
+        $submission = $this->create_submission((int) $confsubmissions->id, $trackid);
+
+        $html = field_formatter::get_track_pill_html($submission);
+
+        $this->assertStringContainsString('mod_confprogram-track-pill', $html);
+        $this->assertStringContainsString('background-color:#3366cc', $html);
+        $this->assertStringContainsString('color:#ffffff', $html);
+        // HTML-escaped once, not double-escaped: a literal '&' stays '&amp;' once.
+        $this->assertStringContainsString('AI &amp; Machine Learning', $html);
+        $this->assertStringNotContainsString('&amp;amp;', $html);
+    }
+
+    /**
+     * A track with no configured colour gets the pill markup with no inline
+     * background-color style at all, so the plugin's own default CSS colour applies.
+     */
+    public function test_get_track_pill_html_without_colour(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $trackid = submissions_api::add_track((int) $confsubmissions->id, 'Uncoloured Track');
+        $submission = $this->create_submission((int) $confsubmissions->id, $trackid);
+
+        $html = field_formatter::get_track_pill_html($submission);
+
+        $this->assertStringContainsString('mod_confprogram-track-pill', $html);
+        $this->assertStringNotContainsString('background-color', $html);
+        $this->assertStringContainsString('Uncoloured Track', $html);
+    }
+
+    /**
+     * A submission with no track at all falls back to the existing plain
+     * "notrack" string, not an empty/broken pill.
+     */
+    public function test_get_track_pill_html_no_track(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $submission = $this->create_submission((int) $confsubmissions->id);
+
+        $html = field_formatter::get_track_pill_html($submission);
+
+        $this->assertSame(get_string('notrack', 'mod_confsubmissions'), $html);
     }
 }
