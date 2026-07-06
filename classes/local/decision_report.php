@@ -17,6 +17,7 @@
 namespace mod_confprogram\local;
 
 use mod_confprogram\api;
+use mod_confsubmissions\api as submissions_api;
 
 /**
  * Data layer behind decisions.php's table and assign.php's "resubmitted"
@@ -92,5 +93,57 @@ final class decision_report {
             }
         }
         return $result;
+    }
+
+    /**
+     * Records the same decision for every valid submission in a batch,
+     * re-verifying instance membership and unvetted-exclusion per id exactly
+     * like the single-row handler in decisions.php already does. An invalid
+     * id in the batch is silently skipped, not an error -- a stale or crafted
+     * id must never abort the whole batch or leak which ids were valid,
+     * mirroring assign.php's existing assigngroup bulk handler.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $confsubmissionsinstanceid The confsubmissions instance this confprogram vets
+     * @param array $submissionids The submitted batch of ids (untrusted)
+     * @param string $decision One of accept/reject/resubmit/waitlist
+     * @param array $unvettedids submissionids still awaiting vetting, to exclude
+     * @param int $userid The user recording the decision
+     * @return int How many submissions actually got a decision recorded
+     */
+    public static function apply_bulk_decision(
+        int $confprogramid,
+        int $confsubmissionsinstanceid,
+        array $submissionids,
+        string $decision,
+        array $unvettedids,
+        int $userid
+    ): int {
+        if (!in_array($decision, ['accept', 'reject', 'resubmit', 'waitlist'], true)) {
+            return 0;
+        }
+
+        // Normalize unvettedids to ints for consistent comparison.
+        $unvettedids = array_map('intval', $unvettedids);
+
+        $count = 0;
+        foreach ($submissionids as $submissionid) {
+            $submissionid = (int) $submissionid;
+
+            if (in_array($submissionid, $unvettedids, true)) {
+                continue;
+            }
+
+            $submission = submissions_api::get_submission($submissionid);
+            if (!$submission || (int) $submission->confsubmissions !== $confsubmissionsinstanceid) {
+                continue;
+            }
+
+            $round = rounds::get_current_round($confprogramid, $submissionid);
+            api::record_decision($confprogramid, $submissionid, $decision, $round, $userid);
+            $count++;
+        }
+
+        return $count;
     }
 }

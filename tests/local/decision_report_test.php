@@ -240,4 +240,105 @@ final class decision_report_test extends advanced_testcase {
 
         $this->assertSame([], $filtered);
     }
+
+    /**
+     * A valid batch of submissionids all belonging to this instance, none
+     * unvetted, all get a decision recorded -- and the count reflects that.
+     */
+    public function test_apply_bulk_decision_valid_batch(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $submission1 = $this->create_submission($confsubmissionsid);
+        $submission2 = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $count = decision_report::apply_bulk_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            [$submission1->id, $submission2->id],
+            'accept',
+            [],
+            (int) $decider->id
+        );
+
+        $this->assertSame(2, $count);
+        $this->assertSame('accept', rounds::get_latest_decision($confprogramid, (int) $submission1->id)->decision);
+        $this->assertSame('accept', rounds::get_latest_decision($confprogramid, (int) $submission2->id)->decision);
+    }
+
+    /**
+     * A submissionid belonging to a DIFFERENT confsubmissions instance is
+     * silently skipped, not acted on -- the same IDOR-prevention check every
+     * other entry point in this plugin already applies.
+     */
+    public function test_apply_bulk_decision_rejects_cross_instance_submission(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        [, $othersubmissionsid] = $this->create_confprogram();
+        $ownsubmission = $this->create_submission($confsubmissionsid);
+        $othersubmission = $this->create_submission($othersubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $count = decision_report::apply_bulk_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            [$ownsubmission->id, $othersubmission->id],
+            'accept',
+            [],
+            (int) $decider->id
+        );
+
+        $this->assertSame(1, $count);
+        $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $othersubmission->id));
+    }
+
+    /**
+     * A submissionid present in $unvettedids is silently skipped.
+     */
+    public function test_apply_bulk_decision_skips_unvetted(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $unvetted = $this->create_submission($confsubmissionsid);
+        $vetted = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $count = decision_report::apply_bulk_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            [$unvetted->id, $vetted->id],
+            'accept',
+            [$unvetted->id],
+            (int) $decider->id
+        );
+
+        $this->assertSame(1, $count);
+        $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $unvetted->id));
+    }
+
+    /**
+     * An invalid decision string is rejected outright -- zero recorded, no
+     * partial processing.
+     */
+    public function test_apply_bulk_decision_rejects_invalid_decision(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $submission = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $count = decision_report::apply_bulk_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            [$submission->id],
+            'not-a-real-decision',
+            [],
+            (int) $decider->id
+        );
+
+        $this->assertSame(0, $count);
+        $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $submission->id));
+    }
 }
