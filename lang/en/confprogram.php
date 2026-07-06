@@ -146,6 +146,7 @@ $string['privacy:metadata:confprogram_unvetted:timecreated'] = 'The time the sub
 $string['remark'] = 'Remark';
 $string['removereviews'] = 'Delete all reviews, decisions and favourites (reset to Review phase)';
 $string['resubmissionsneeded'] = 'Your submissions awaiting resubmission';
+$string['resubmittedbanner'] = 'Now showing: submissions awaiting a new round of review.';
 $string['review'] = 'Review';
 $string['reviewer'] = 'Reviewer';
 $string['reviewergroup'] = 'Group: {$a}';

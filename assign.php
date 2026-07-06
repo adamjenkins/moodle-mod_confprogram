@@ -18,11 +18,15 @@
  * Reviewer/reviewer-group assignment screen for mod_confprogram.
  *
  * Lists non-unvetted submissions from the linked mod_confsubmissions
- * instance, optionally filtered by track (or, when arriving from
- * decisions.php's "Start new review round" link, filtered to a single
- * resubmitted submission via the "focus" param). Supports assigning an
- * individual reviewer per submission, and, when groupreviewmode is on,
- * bulk-assigning a reviewer group to a checked set of submissions.
+ * instance, optionally filtered by track, or by one of two mutually
+ * exclusive modes: a single-submission "focus" (from an old direct link,
+ * still supported), or every resubmit-decided submission at once (from
+ * decisions.php's "Start a new round" bulk link, via ?resubmitted=1).
+ * Supports assigning an individual reviewer per submission, and, when
+ * groupreviewmode is on, bulk-assigning a reviewer group to a checked set
+ * of submissions -- which is exactly what makes the ?resubmitted=1 mode
+ * useful: it lands the organiser directly on that existing bulk-assign UI,
+ * pre-filtered to the whole batch that needs a new round's reviewer.
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -34,6 +38,7 @@ require_once($CFG->dirroot . '/mod/confprogram/lib.php');
 require_once($CFG->libdir . '/grouplib.php');
 
 use mod_confprogram\api;
+use mod_confprogram\local\decision_report;
 use mod_confprogram\local\field_formatter;
 use mod_confprogram\local\reviewer_workload;
 use mod_confprogram\local\rounds;
@@ -42,6 +47,13 @@ use mod_confsubmissions\api as submissions_api;
 $id = required_param('id', PARAM_INT);
 $filtertrack = optional_param('trackid', '', PARAM_INT);
 $focus = optional_param('focus', 0, PARAM_INT);
+$resubmitted = optional_param('resubmitted', 0, PARAM_BOOL);
+
+// Whichever of the two mutually-exclusive non-default filter modes is active
+// (if any), so every POST-handling redirect below can preserve it -- otherwise
+// bulk-assigning reviewers while viewing a filtered set would silently kick
+// the organiser back to the unfiltered view after every single action.
+$backurlsuffix = $focus ? ('&focus=' . $focus) : ($resubmitted ? '&resubmitted=1' : '');
 
 [$course, $cm] = get_course_and_cm_from_cmid($id, 'confprogram');
 $confprogram = $DB->get_record('confprogram', ['id' => $cm->instance], '*', MUST_EXIST);
@@ -87,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($removeid = optional_param('removeassignment', 0, PARAM_INT)) {
         api::unassign((int) $confprogram->id, $removeid);
-        redirect($pageurl->out(false) . ($focus ? '&focus=' . $focus : ''));
+        redirect($pageurl->out(false) . $backurlsuffix);
     }
 
     if ($assignsubmissionid = optional_param('assignindividual', 0, PARAM_INT)) {
@@ -100,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $round = rounds::get_current_round((int) $confprogram->id, $assignsubmissionid);
                 if (!reviewer_workload::has_capacity((int) $confprogram->id, $reviewerid, $round)) {
                     redirect(
-                        $pageurl->out(false) . ($focus ? '&focus=' . $focus : ''),
+                        $pageurl->out(false) . $backurlsuffix,
                         get_string('warningreviewercapreached', 'mod_confprogram'),
                         null,
                         \core\output\notification::NOTIFY_WARNING
@@ -108,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        redirect($pageurl->out(false) . ($focus ? '&focus=' . $focus : ''));
+        redirect($pageurl->out(false) . $backurlsuffix);
     }
 
     if (optional_param('assigngroup', 0, PARAM_INT)) {
@@ -123,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        redirect($pageurl->out(false) . ($focus ? '&focus=' . $focus : ''));
+        redirect($pageurl->out(false) . $backurlsuffix);
     }
 }
 
@@ -149,6 +161,14 @@ if ($focus) {
     if ($focussubmission && !in_array($focus, $unvettedids, true)) {
         $submissions[$focus] = $focussubmission;
     }
+} else if ($resubmitted) {
+    echo $OUTPUT->notification(get_string('resubmittedbanner', 'mod_confprogram'), 'info');
+    echo html_writer::tag('p', html_writer::link($pageurl, get_string('backtoall', 'mod_confprogram')));
+    $submissions = submissions_api::get_submissions_for_instance($confsubmissionscm->instance);
+    foreach ($unvettedids as $uid) {
+        unset($submissions[$uid]);
+    }
+    $submissions = decision_report::filter_resubmitted((int) $confprogram->id, $submissions);
 } else {
     // Plain GET filter form: no JS required, matches mod_confsubmissions's view.php pattern.
     echo html_writer::start_tag('form', [
@@ -164,7 +184,7 @@ if ($focus) {
     echo html_writer::end_tag('form');
 
     $filters = [];
-    if ($filtertrack !== '') {
+    if ($filtertrack) {
         $filters['trackid'] = $filtertrack;
     }
     // TODO: consider pagination once submission volumes get large.
@@ -187,6 +207,8 @@ echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->o
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
 if ($focus) {
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'focus', 'value' => $focus]);
+} else if ($resubmitted) {
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'resubmitted', 'value' => 1]);
 }
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 
