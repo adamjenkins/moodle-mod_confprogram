@@ -98,6 +98,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && optional_param('togglephase', 0, PA
         api::send_pending_decision_notifications((int) $confprogram->id);
     }
 
+    // redirect() disables the clean Location-header redirect and instead renders
+    // its "Error output, so disabling automatic redirect." fallback page whenever
+    // error_get_last() still holds a warning/notice/deprecation matching $CFG->debug
+    // -- and PHP does not reset that global at the start of a new request under
+    // PHP-FPM, so it can be leftover from a completely unrelated EARLIER request
+    // that happened to be handled by the same worker process (confirmed live: this
+    // handler's own two calls above emit no warnings on their own, yet the fallback
+    // page reproduced intermittently -- same action, same data, different outcome
+    // between runs). Clearing it right before our own redirect prevents that stale,
+    // unrelated state from masquerading as an error in this request.
+    error_clear_last();
     redirect($pageurl);
 }
 
