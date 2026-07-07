@@ -249,6 +249,29 @@ final class api_test extends advanced_testcase {
     }
 
     /**
+     * record_decision() does not sync status for a submission already withdrawn, even
+     * when called live during Display phase (e.g. an organiser re-decides a submission
+     * that was accepted, then withdrawn) -- same guard, other call site, as
+     * test_sync_submission_statuses_does_not_overwrite_withdrawn() below covers for
+     * the batch phase-toggle sync path.
+     */
+    public function test_record_decision_does_not_sync_status_for_withdrawn_submission(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogramid]);
+
+        $submission = $this->create_submission($confsubmissionsid);
+        $DB->set_field('confsubmissions_submission', 'status', 'withdrawn', ['id' => $submission->id]);
+        $decider = $this->getDataGenerator()->create_user();
+
+        api::record_decision($confprogramid, (int) $submission->id, 'accept', 1, (int) $decider->id);
+
+        $this->assertSame('withdrawn', $DB->get_field('confsubmissions_submission', 'status', ['id' => $submission->id]));
+    }
+
+    /**
      * record_decision() does not touch mod_confsubmissions status for Waitlist/
      * Resubmit decisions, even in Display phase -- mod_confsubmissions has no
      * corresponding status value for either yet (only submitted/accepted/rejected).
@@ -299,6 +322,37 @@ final class api_test extends advanced_testcase {
 
         $this->assertSame('accepted', $DB->get_field('confsubmissions_submission', 'status', ['id' => $resubmitted->id]));
         $this->assertSame('rejected', $DB->get_field('confsubmissions_submission', 'status', ['id' => $rejected->id]));
+    }
+
+    /**
+     * sync_submission_statuses_to_confsubmissions() must never overwrite a submission
+     * the submitter has since withdrawn (status 'withdrawn', set entirely inside
+     * mod_confsubmissions) back to 'accepted'/'rejected' from this instance's own
+     * still-recorded decision -- bug reported 2026-07-07: "cycling confprogram
+     * through display/review phases unwithdraws withdrawn presentations". A withdrawn
+     * submission must stay withdrawn until explicitly unwithdrawn (mod_confsubmissions
+     * editany) or hard-deleted.
+     */
+    public function test_sync_submission_statuses_does_not_overwrite_withdrawn(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $decider = $this->getDataGenerator()->create_user();
+
+        $submission = $this->create_submission($confsubmissionsid);
+        api::record_decision($confprogramid, (int) $submission->id, 'accept', 1, (int) $decider->id);
+
+        // The submitter withdraws after being accepted, entirely inside
+        // mod_confsubmissions (mirrors view.php's own Withdraw action).
+        $DB->set_field('confsubmissions_submission', 'status', 'withdrawn', ['id' => $submission->id]);
+
+        // Simulates cycling this confprogram instance from Review to Display (or any
+        // later re-sync): the instance's own decision for this submission is still
+        // 'accept', but that must not resurrect the status.
+        api::sync_submission_statuses_to_confsubmissions($confprogramid);
+
+        $this->assertSame('withdrawn', $DB->get_field('confsubmissions_submission', 'status', ['id' => $submission->id]));
     }
 
     /**

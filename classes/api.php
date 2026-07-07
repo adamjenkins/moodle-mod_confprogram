@@ -543,11 +543,26 @@ class api {
      * separately-scoped follow-up, since this fix specifically addresses the reported
      * "accepted or rejected" case.
      *
+     * A submission the submitter has since withdrawn (status 'withdrawn', set entirely
+     * inside mod_confsubmissions -- see RELATIONS.md) is left alone: without this
+     * guard, cycling this confprogram instance's phase (or any later call to
+     * sync_submission_statuses_to_confsubmissions()) would silently overwrite
+     * 'withdrawn' back to 'accepted'/'rejected' from this instance's still-recorded
+     * decision (user request, 2026-07-07: "a withdrawn presentation should remain
+     * withdrawn unless deleted or unwithdrawn by an admin in confsubmissions"). Only an
+     * explicit mod_confsubmissions:editany "Unwithdraw" action (or a hard delete) may
+     * move it off 'withdrawn' again.
+     *
      * @param string $decision One of accept, reject, resubmit, waitlist
      * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
      * @return void
      */
     private static function sync_one_submission_status_to_confsubmissions(string $decision, int $submissionid): void {
+        $submission = submissions_api::get_submission($submissionid);
+        if (!$submission || $submission->status === 'withdrawn') {
+            return;
+        }
+
         if ($decision === 'accept') {
             submissions_api::set_status($submissionid, 'accepted');
         } else if ($decision === 'reject') {
