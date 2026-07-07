@@ -44,6 +44,30 @@
     white-space: pre-wrap;
 }
 
+/*
+ * A row for a submission this instance already accepted, but whose submitter has since
+ * withdrawn it in mod_confsubmissions (user request, 2026-07-07) -- greyed out, with a
+ * strikethrough on the title/schedule/track-pill text specifically (not the whole row via
+ * ancestor propagation, which would also strike through the favourite-star icon glyph and
+ * the "Withdrawn" badge itself, both of which should keep displaying normally). Mirrors
+ * mod_confscheduler's identical treatment of the same underlying 'withdrawn' status on its
+ * own Display-mode grid block.
+ */
+.mod_confprogram-list tr.confprogram-row-withdrawn {
+    background: #f1f1f1;
+    color: #6c757d;
+}
+
+.mod_confprogram-list tr.confprogram-row-withdrawn .confprogram-open-detail,
+.mod_confprogram-list tr.confprogram-row-withdrawn .confprogram-schedule,
+.mod_confprogram-list tr.confprogram-row-withdrawn .mod_confprogram-track-pill {
+    text-decoration: line-through;
+}
+
+.confprogram-withdrawn-badge {
+    margin-left: 0.4rem;
+}
+
 @media (max-width: 576px) {
     .mod_confprogram-list table.confprogram-list-table,
     .mod_confprogram-list table.confprogram-list-table thead,

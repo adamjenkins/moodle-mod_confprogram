@@ -362,12 +362,37 @@ if ($confprogram->phase === 'review') {
             $submission = $row->submission;
             $data = [];
 
+            // A submission this confprogram instance already accepted (possibly already
+            // scheduled) can be withdrawn afterwards by its own submitter, entirely inside
+            // mod_confsubmissions -- there is no cross-plugin cascade/notification when
+            // that happens (see RELATIONS.md). Rather than silently continuing to list it
+            // as if nothing changed, flag the row here so a viewer isn't misled into
+            // thinking it's still happening (user request, 2026-07-07): greyed out with a
+            // strikethrough across the row (.confprogram-row-withdrawn, in styles.css,
+            // mirrors mod_confscheduler's identical Display-mode treatment of the same
+            // 'withdrawn' status), plus an explicit "Withdrawn" badge next to the title,
+            // since colour/strikethrough alone isn't reliably conveyed to everyone (e.g.
+            // screen reader users, colour-blind users).
+            $iswithdrawn = $submission->status === 'withdrawn';
+            if ($iswithdrawn) {
+                $rowindex = count($table->data);
+                $table->rowclasses[$rowindex] = 'confprogram-row-withdrawn';
+            }
+
             $titlelink = html_writer::link('#', format_string($submission->title), [
                 'class'              => 'confprogram-open-detail',
                 'data-cmid'          => $cm->id,
                 'data-submissionid'  => $submission->id,
             ]);
-            $titlecell = new html_table_cell($titlelink);
+            $titlecontent = $titlelink;
+            if ($iswithdrawn) {
+                $titlecontent .= ' ' . html_writer::tag(
+                    'span',
+                    get_string('status_withdrawn', 'mod_confsubmissions'),
+                    ['class' => 'badge badge-secondary confprogram-withdrawn-badge']
+                );
+            }
+            $titlecell = new html_table_cell($titlecontent);
             $titlecell->attributes['data-label'] = get_string('title', 'mod_confsubmissions');
             $data[] = $titlecell;
 
