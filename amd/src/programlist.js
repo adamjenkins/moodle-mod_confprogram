@@ -19,12 +19,16 @@ import Notification from 'core/notification';
 
 /**
  * Wires up the Display-phase accepted-submissions list (view.php): the favourite-star
- * toggle (mod_confprogram_toggle_favourite) and the "open submission detail" modal
- * (mod_confprogram_get_submission_detail), rendered via core/modal.
+ * toggle (mod_confprogram_toggle_favourite), the "open submission detail" modal
+ * (mod_confprogram_get_submission_detail), rendered via core/modal, and the day-selector
+ * form's auto-submit-on-change (user request, 2026-07-07 -- replaces a separate "Show"
+ * submit button; view.php still renders a <noscript> fallback button for JS-disabled
+ * browsers).
  *
- * Both handlers are delegated on document.body so this works for any number of rows
- * without per-row listener setup, and continues to work if the list is ever
- * re-rendered without a page reload in future.
+ * All three are delegated on document.body so this works for any number of rows (or, for
+ * the day selector, regardless of whether it exists on the current page at all) without
+ * per-element listener setup, and continues to work if the list is ever re-rendered
+ * without a page reload in future.
  *
  * @module     mod_confprogram/programlist
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -34,6 +38,7 @@ import Notification from 'core/notification';
 const SELECTORS = {
     FAVOURITE_TOGGLE: '.confprogram-favourite-toggle',
     OPEN_DETAIL: '.confprogram-open-detail',
+    DAY_SELECT: '#confprogram-day',
 };
 
 /**
@@ -92,7 +97,8 @@ const openDetail = (link) => {
 };
 
 /**
- * Initialises the delegated click handlers. Safe to call once per page.
+ * Initialises the delegated click/change handlers. Safe to call once per page (see this
+ * module's own docblock -- view.php calls it exactly once, unconditionally, per page load).
  */
 export const init = () => {
     document.addEventListener('click', (event) => {
@@ -107,6 +113,12 @@ export const init = () => {
         if (openLink) {
             event.preventDefault();
             openDetail(openLink);
+        }
+    });
+
+    document.addEventListener('change', (event) => {
+        if (event.target.matches(SELECTORS.DAY_SELECT)) {
+            event.target.form.submit();
         }
     });
 };

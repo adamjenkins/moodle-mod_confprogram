@@ -100,6 +100,7 @@ $string['modulename_help'] = 'Conference Program アクティビティは、Conf
 $string['modulenameplural'] = 'Conference Program';
 $string['myfeedback'] = 'フィードバック対象: {$a}';
 $string['myreviewqueue'] = '自分の査読キュー';
+$string['myreviews'] = '自分の発表に対する査読';
 $string['noacceptedsubmissions'] = 'まだ表示できる採択済みの応募はありません。';
 $string['nocriteriondetail'] = 'この査読には項目ごとの詳細な内訳はありません。上記の評点をご覧ください。';
 $string['nodecisionyet'] = '未決定';

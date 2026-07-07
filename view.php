@@ -46,8 +46,10 @@ use mod_confprogram\api;
 use mod_confprogram\local\display_list;
 use mod_confprogram\local\field_formatter;
 use mod_confprogram\local\field_settings;
+use mod_confprogram\local\review_display;
 use mod_confprogram\local\rounds;
 use mod_confprogram\local\schedule_info;
+use mod_confprogram\local\speaker_submissions;
 use mod_confsubmissions\api as submissions_api;
 
 $id = required_param('id', PARAM_INT);
@@ -230,6 +232,33 @@ if ($confprogram->phase === 'review') {
     if ($resubmitlinks) {
         echo $OUTPUT->heading(get_string('resubmissionsneeded', 'mod_confprogram'), 4);
         echo html_writer::alist($resubmitlinks);
+    }
+
+    // Speaker-facing "my reviews" (user request, 2026-07-07): once at least one reviewer
+    // has completed their review of a presentation the current user speaks on (any role,
+    // not just the submitter -- see speaker_submissions.php), its content is shown right
+    // here, one section per presentation, reusing feedback.php's own review_display
+    // renderer. Deliberately Review-phase only, unlike the resubmission links above:
+    // this whole branch of view.php never runs once $confprogram->phase is 'display', so
+    // there is nothing further to gate -- the reviews simply stop being reachable the
+    // moment an organiser switches phase, the same one-way "no code path renders this in
+    // Display phase" pattern the rest of this plugin's Review-phase content already
+    // relies on (see RELATIONS.md's phase-embargo section).
+    $speakingsubmissions = speaker_submissions::get_for_user((int) $confsubmissionscm->instance, (int) $USER->id);
+    $reviewsections = [];
+    foreach ($speakingsubmissions as $speakingsubmission) {
+        $round = rounds::get_current_round((int) $confprogram->id, (int) $speakingsubmission->id);
+        $reviews = api::get_reviews_for_round((int) $confprogram->id, (int) $speakingsubmission->id, $round);
+        if ($reviews) {
+            $reviewsections[] = ['submission' => $speakingsubmission, 'reviews' => $reviews];
+        }
+    }
+    if ($reviewsections) {
+        echo $OUTPUT->heading(get_string('myreviews', 'mod_confprogram'), 4);
+        foreach ($reviewsections as $reviewsection) {
+            echo $OUTPUT->heading(format_string($reviewsection['submission']->title), 5);
+            echo review_display::render($context, $reviewsection['reviews']);
+        }
     }
 } else if ($confprogram->phase === 'display') {
     $favouritesonly = optional_param('favouritesonly', 0, PARAM_BOOL);
@@ -420,18 +449,35 @@ if ($confprogram->phase === 'review') {
             echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'favouritesonly', 'value' => 1]);
         }
         echo html_writer::tag('label', get_string('day', 'mod_confprogram'), ['for' => 'confprogram-day', 'class' => 'mr-2']);
+        // No submit button (user request, 2026-07-07): amd/src/programlist.js submits this
+        // form itself on the select's 'change' event instead, via a delegated listener --
+        // see that module's SELECTORS.DAY_SELECT. A <noscript> fallback submit button keeps
+        // the day filter reachable with JS disabled, matching this file's existing pattern
+        // of degrading gracefully rather than hard-depending on JS (see this whole form's
+        // plain GET-with-hidden-fields design).
         echo html_writer::select($options, 'day', $default, false, ['id' => 'confprogram-day', 'class' => 'mr-2']);
+        echo html_writer::start_tag('noscript');
         echo html_writer::empty_tag('input', [
             'type'  => 'submit',
             'value' => get_string('showday', 'mod_confprogram'),
             'class' => 'btn btn-secondary btn-sm',
         ]);
+        echo html_writer::end_tag('noscript');
         echo html_writer::end_tag('form');
 
         $rows = $isalldays ? [] : ($groups[$default] ?? []);
     } else {
         $rows = $decorated;
     }
+
+    // Called exactly once, unconditionally, regardless of whether this page load has any
+    // rows to show: programlist.js also wires up the day-selector's auto-submit-on-change
+    // (see the form above), which must work even when the currently selected day is empty.
+    // Calling js_call_amd() more than once per page load would attach its delegated
+    // document listeners more than once too, double-firing every click/change handler --
+    // so every other call site below was removed rather than left in place alongside this
+    // one.
+    $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');
 
     if ($isalldays) {
         echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
@@ -444,17 +490,13 @@ if ($confprogram->phase === 'review') {
             $anyrendered = $rendertable($groups[$key]) || $anyrendered;
         }
         echo html_writer::end_tag('div');
-        if ($anyrendered) {
-            $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');
-        } else {
+        if (!$anyrendered) {
             echo $OUTPUT->notification(get_string('noacceptedsubmissions', 'mod_confprogram'), 'info');
         }
     } else if ($rows) {
         echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
         $rendertable($rows);
         echo html_writer::end_tag('div');
-
-        $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');
     } else {
         echo $OUTPUT->notification(get_string('noacceptedsubmissions', 'mod_confprogram'), 'info');
     }

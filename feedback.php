@@ -36,10 +36,9 @@
 
 require_once('../../config.php');
 require_once($CFG->dirroot . '/mod/confprogram/lib.php');
-require_once($CFG->dirroot . '/grade/grading/lib.php');
 
 use mod_confprogram\api;
-use mod_confprogram\local\identity;
+use mod_confprogram\local\review_display;
 use mod_confprogram\local\rounds;
 use mod_confsubmissions\api as submissions_api;
 
@@ -101,85 +100,7 @@ if (!$latestdecision || $latestdecision->decision !== 'resubmit') {
 $feedbackround = (int) $latestdecision->round;
 $reviews = api::get_reviews_for_round((int) $confprogram->id, $submissionid, $feedbackround);
 
-$canviewidentity = identity::can_view_identity($context);
-
-if (!$reviews) {
-    echo $OUTPUT->notification(get_string('nofeedbackavailable', 'mod_confprogram'), 'info');
-} else {
-    $gradingmanager = get_grading_manager($context, 'mod_confprogram', 'review');
-    $gradingmethod = $gradingmanager->get_active_method();
-    $controller = $gradingmethod ? $gradingmanager->get_controller($gradingmethod) : null;
-    $definition = ($controller && $controller->is_form_available()) ? $controller->get_definition() : null;
-
-    $i = 1;
-    foreach ($reviews as $review) {
-        echo html_writer::start_tag('div', ['class' => 'card mb-3']);
-        echo html_writer::start_tag('div', ['class' => 'card-body']);
-
-        if ($canviewidentity) {
-            $reviewer = \core_user::get_user($review->reviewerid);
-            $reviewerlabel = $reviewer ? fullname($reviewer) : '-';
-        } else {
-            $reviewerlabel = get_string('anonymousreviewer', 'mod_confprogram', $i);
-        }
-        echo html_writer::tag('h5', $reviewerlabel);
-        echo html_writer::tag('p', get_string('grade', 'mod_confprogram') . ': '
-            . ($review->grade !== null ? format_float($review->grade, 2) : '-'));
-
-        // Best-effort per-criterion breakdown for rubric-graded reviews. get_or_create_instance()
-        // here always finds the exact existing instance rather than creating a new one: we pass
-        // the instance's own id, raterid and itemid straight from the confprogram_review row, and
-        // fetch_instance() only returns an instance for an exact (id, raterid, itemid) match (see
-        // review.php's block comment on why itemid is the confprogram_review row id, not the
-        // submission id). If for any reason the grading area's active method has since changed
-        // away from rubric, or the instance record is gone, this quietly falls back to just the
-        // numeric grade already printed above.
-        $renderedcriteria = false;
-        if ($gradingmethod === 'rubric' && $definition && !empty($definition->rubric_criteria) && $review->gradinginstanceid) {
-            $instance = $controller->get_or_create_instance(
-                (int) $review->gradinginstanceid,
-                (int) $review->reviewerid,
-                (int) $review->id
-            );
-            $isexpectedinstance = $instance instanceof \gradingform_rubric_instance
-                && (int) $instance->get_id() === (int) $review->gradinginstanceid;
-            if ($isexpectedinstance) {
-                $filling = $instance->get_rubric_filling();
-                if (!empty($filling['criteria'])) {
-                    $table = new html_table();
-                    $table->head = [
-                        get_string('criterion', 'mod_confprogram'),
-                        get_string('level', 'mod_confprogram'),
-                        get_string('remark', 'mod_confprogram'),
-                    ];
-                    $table->attributes['class'] = 'generaltable';
-                    foreach ($filling['criteria'] as $criterionid => $criteriondata) {
-                        $criteriondef = $definition->rubric_criteria[$criterionid] ?? null;
-                        if (!$criteriondef) {
-                            continue;
-                        }
-                        $leveldef = $criteriondef['levels'][$criteriondata['levelid']] ?? null;
-                        $table->data[] = [
-                            format_string($criteriondef['description']),
-                            $leveldef ? format_string($leveldef['definition']) : '-',
-                            !empty($criteriondata['remark']) ? format_text($criteriondata['remark'], FORMAT_HTML) : '-',
-                        ];
-                    }
-                    echo html_writer::table($table);
-                    $renderedcriteria = true;
-                }
-            }
-        }
-
-        if (!$renderedcriteria) {
-            echo html_writer::tag('p', get_string('nocriteriondetail', 'mod_confprogram'), ['class' => 'text-muted']);
-        }
-
-        echo html_writer::end_tag('div');
-        echo html_writer::end_tag('div');
-        $i++;
-    }
-}
+echo review_display::render($context, $reviews);
 
 // NOTE (known follow-up limitation, out of this plugin's scope): mod_confsubmissions's own
 // edit.php additionally gates editing on its "call is open" window (timeopen/timeclose),

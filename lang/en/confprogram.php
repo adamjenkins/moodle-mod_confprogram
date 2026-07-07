@@ -100,6 +100,7 @@ $string['modulename_help'] = 'The Conference Program activity takes submissions 
 $string['modulenameplural'] = 'Conference Programs';
 $string['myfeedback'] = 'Feedback for: {$a}';
 $string['myreviewqueue'] = 'My review queue';
+$string['myreviews'] = 'Reviews of my presentations';
 $string['noacceptedsubmissions'] = 'No accepted submissions to display yet.';
 $string['nocriteriondetail'] = 'A detailed per-criterion breakdown is not available for this review; see the grade above.';
 $string['nodecisionyet'] = 'Not yet decided';
