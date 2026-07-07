@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- User request (2026-07-07): the Decision report's Title cell now shows an
+  "Edit" link into `mod_confsubmissions`'s `edit.php` for anyone holding
+  that plugin's new `mod/confsubmissions:editany` capability (granted by
+  default to `editingteacher`/`manager` -- see that plugin's own
+  changelog). Saving or cancelling returns to the Decision report with
+  whatever track/decision-status filter was active, via `edit.php`'s new
+  `returnurl` param. No other confprogram page changes.
 - User request (2026-07-06): added `composer.json` so the plugin can be
   published on Packagist per the
   [Moodle Composer guide](https://moodledev.io/docs/5.2/guides/composer) --
