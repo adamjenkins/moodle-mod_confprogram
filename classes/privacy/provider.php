@@ -35,16 +35,20 @@ use core_privacy\local\request\writer;
  *   (decidedby).
  * - confprogram_favourite: the user (userid) who favourited a submission.
  * - confprogram_unvetted: the user (setby) who flagged a submission as unvetted.
+ * - confprogram_review: the reviewer (reviewerid) who reviewed a submission, the
+ *   numeric grade they gave, and the round -- i.e. "who reviewed what, and how they
+ *   scored it", this plugin's own record of a reviewer's activity.
  * confprogram_notiftemplate (organiser-authored decision-notification subject/body
  * text) is NOT covered here -- it is instance configuration, not personal data,
  * matching mod_confcheckin's own confcheckin_template exclusion.
  *
  * mod_confsubmissions's own tables (the submissions being vetted) are that plugin's
  * privacy responsibility, not this one's; a submissionid stored on these rows is a
- * cross-plugin reference, not personal data owned by this plugin. Rubric review
- * comments/scores are stored by core's advanced grading API (grading_areas /
- * grading_definitions / grading_instances) once the grading area is registered in a
- * follow-up task, and are that core subsystem's privacy responsibility.
+ * cross-plugin reference, not personal data owned by this plugin. The rubric fill-in
+ * DETAIL (per-criterion levels and remark text) is stored by core's advanced grading
+ * API (grading_areas / grading_definitions / grading_instances) and is that core
+ * subsystem's privacy responsibility -- but confprogram_review itself (reviewerid +
+ * the aggregate grade + round), this plugin's own mirror row, IS covered here.
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -71,6 +75,14 @@ class provider implements
             'userid'     => 'privacy:metadata:confprogram_reviewermax:userid',
             'maxreviews' => 'privacy:metadata:confprogram_reviewermax:maxreviews',
         ], 'privacy:metadata:confprogram_reviewermax');
+
+        $collection->add_database_table('confprogram_review', [
+            'reviewerid'   => 'privacy:metadata:confprogram_review:reviewerid',
+            'grade'        => 'privacy:metadata:confprogram_review:grade',
+            'round'        => 'privacy:metadata:confprogram_review:round',
+            'timecreated'  => 'privacy:metadata:confprogram_review:timecreated',
+            'timemodified' => 'privacy:metadata:confprogram_review:timemodified',
+        ], 'privacy:metadata:confprogram_review');
 
         $collection->add_database_table('confprogram_decision', [
             'decidedby'    => 'privacy:metadata:confprogram_decision:decidedby',
@@ -134,6 +146,10 @@ class provider implements
                     OR EXISTS (
                         SELECT 1 FROM {confprogram_unvetted} u
                          WHERE u.confprogram = cp.id AND u.setby = :userid5
+                       )
+                    OR EXISTS (
+                        SELECT 1 FROM {confprogram_review} rv
+                         WHERE rv.confprogram = cp.id AND rv.reviewerid = :userid6
                        )";
 
         $contextlist = new contextlist();
@@ -144,6 +160,7 @@ class provider implements
             'userid3'      => $userid,
             'userid4'      => $userid,
             'userid5'      => $userid,
+            'userid6'      => $userid,
         ]);
         return $contextlist;
     }
@@ -194,6 +211,12 @@ class provider implements
             "SELECT setby FROM {confprogram_unvetted} WHERE confprogram = :instanceid5",
             ['instanceid5' => $cm->instance]
         );
+
+        $userlist->add_from_sql(
+            'reviewerid',
+            "SELECT reviewerid FROM {confprogram_review} WHERE confprogram = :instanceid6",
+            ['instanceid6' => $cm->instance]
+        );
     }
 
     /**
@@ -241,6 +264,21 @@ class provider implements
                 writer::with_context($context)->export_data(['reviewer_max_override'], (object) [
                     'maxreviews' => $reviewermax->maxreviews,
                 ]);
+            }
+
+            $reviews = $DB->get_records(
+                'confprogram_review',
+                ['confprogram' => $confprogram->id, 'reviewerid' => $userid]
+            );
+            if ($reviews) {
+                $data = array_map(fn($r) => (object) [
+                    'submissionid' => $r->submissionid,
+                    'round'        => $r->round,
+                    'grade'        => $r->grade,
+                    'timecreated'  => \core_privacy\local\request\transform::datetime($r->timecreated),
+                    'timemodified' => \core_privacy\local\request\transform::datetime($r->timemodified),
+                ], array_values($reviews));
+                writer::with_context($context)->export_data(['reviews_completed'], (object) ['reviews' => $data]);
             }
 
             $decisions = $DB->get_records(
@@ -306,6 +344,7 @@ class provider implements
         $DB->delete_records('confprogram_decision', ['confprogram' => $confprogram->id]);
         $DB->delete_records('confprogram_favourite', ['confprogram' => $confprogram->id]);
         $DB->delete_records('confprogram_unvetted', ['confprogram' => $confprogram->id]);
+        $DB->delete_records('confprogram_review', ['confprogram' => $confprogram->id]);
     }
 
     /**
@@ -348,6 +387,10 @@ class provider implements
             $DB->delete_records('confprogram_unvetted', [
                 'confprogram' => $confprogram->id,
                 'setby'       => $userid,
+            ]);
+            $DB->delete_records('confprogram_review', [
+                'confprogram' => $confprogram->id,
+                'reviewerid'  => $userid,
             ]);
         }
     }
@@ -401,6 +444,11 @@ class provider implements
         $DB->delete_records_select(
             'confprogram_unvetted',
             "confprogram = ? AND setby $insql",
+            array_merge([$confprogram->id], $params)
+        );
+        $DB->delete_records_select(
+            'confprogram_review',
+            "confprogram = ? AND reviewerid $insql",
             array_merge([$confprogram->id], $params)
         );
     }
