@@ -92,7 +92,7 @@ final class confprogram_test extends advanced_testcase {
         $this->assertTrue(confprogram_supports(FEATURE_MOD_INTRO));
         $this->assertTrue(confprogram_supports(FEATURE_BACKUP_MOODLE2));
         $this->assertTrue(confprogram_supports(FEATURE_ADVANCED_GRADING));
-        $this->assertSame(MOD_PURPOSE_OTHER, confprogram_supports(FEATURE_MOD_PURPOSE));
+        $this->assertSame(MOD_PURPOSE_COLLABORATION, confprogram_supports(FEATURE_MOD_PURPOSE));
         $this->assertNull(confprogram_supports('some_unknown_feature'));
     }
 
