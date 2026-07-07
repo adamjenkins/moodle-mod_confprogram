@@ -63,6 +63,17 @@ $PAGE->set_context($context);
 $PAGE->requires->js_call_amd('mod_confprogram/decisions', 'init');
 
 $confsubmissionscm = get_coursemodule_from_id('confsubmissions', $confprogram->confsubmissionscmid, 0, false, MUST_EXIST);
+$confsubmissionscontext = context_module::instance($confsubmissionscm->id);
+$caneditsubmissions = has_capability('mod/confsubmissions:editany', $confsubmissionscontext);
+
+$returnurlparams = ['id' => $cm->id];
+if ($filtertrack !== '') {
+    $returnurlparams['trackid'] = $filtertrack;
+}
+if ($filterstatus !== '') {
+    $returnurlparams['decisionstatus'] = $filterstatus;
+}
+$decisionsreturnurl = new moodle_url('/mod/confprogram/decisions.php', $returnurlparams);
 
 // Review-phase-only screen: block state-changing actions here too, not just rendering.
 if ($confprogram->phase !== 'review') {
@@ -287,12 +298,25 @@ foreach ($decorated as $row) {
         'class' => 'btn btn-primary btn-sm',
     ]);
 
+    $titlecell = format_string($submission->title);
+    if ($caneditsubmissions) {
+        $editurl = new moodle_url('/mod/confsubmissions/edit.php', [
+            'id'           => $confsubmissionscm->id,
+            'submissionid' => $submission->id,
+            'returnurl'    => $decisionsreturnurl->out(false),
+        ]);
+        $titlecell .= ' ' . html_writer::link($editurl, get_string('edit'), [
+            'class'      => 'ml-2',
+            'aria-label' => get_string('editsubmissionlink', 'mod_confprogram', format_string($submission->title)),
+        ]);
+    }
+
     $table->data[] = [
         html_writer::checkbox('submissionids[]', $submission->id, false, '', [
             'class'      => 'mod_confprogram-row-checkbox',
             'aria-label' => get_string('selectsubmission', 'mod_confprogram', format_string($submission->title)),
         ]),
-        format_string($submission->title),
+        $titlecell,
         field_formatter::get_track_pill_html($submission),
         $row->round,
         $decisioncell,

@@ -67,6 +67,7 @@ $string['displaysettings'] = '表示項目の設定';
 $string['displaysettingssaved'] = '表示設定を保存しました。';
 $string['editmysubmission'] = '自分の応募を編集';
 $string['editreview'] = '査読を編集';
+$string['editsubmissionlink'] = '{$a} を編集';
 $string['error:invalidconfsubmissionscmid'] = 'このコース内の Conference Submissions アクティビティを選択してください。';
 $string['error:invalidnumber'] = '0以上の整数を入力してください。';
 $string['error:noconfsubmissions'] = 'このコースにはまだ Conference Submissions アクティビティがありません。先に追加してください。';

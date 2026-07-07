@@ -67,6 +67,7 @@ $string['displaysettings'] = 'Display field settings';
 $string['displaysettingssaved'] = 'Display settings saved.';
 $string['editmysubmission'] = 'Edit my submission';
 $string['editreview'] = 'Edit review';
+$string['editsubmissionlink'] = 'Edit {$a}';
 $string['error:invalidconfsubmissionscmid'] = 'Choose a Conference Submissions activity from this course.';
 $string['error:invalidnumber'] = 'Please enter a whole number of 0 or more.';
 $string['error:noconfsubmissions'] = 'There are no Conference Submissions activities in this course yet. Add one first.';
