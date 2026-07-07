@@ -68,6 +68,29 @@
     margin-left: 0.4rem;
 }
 
+/*
+ * "All days" mode (view.php) renders one independent <table> per day, all sharing the
+ * same column set ($listfields/$showtrackpill are computed once, outside the per-day
+ * loop) but each browser-auto-sized to ITS OWN day's cell content -- so two days with
+ * differently-lengthed titles/values ended up with visibly different column widths
+ * (user report, 2026-07-07). table-layout: fixed makes a table split its width evenly
+ * across columns regardless of content length, so every same-column-count table at the
+ * same container width (100%, one per line) lands on identical widths. Scoped above
+ * the mobile breakpoint below, which turns the table into a stacked block layout where
+ * table-layout has no effect anyway, but kept explicit for clarity.
+ */
+@media (min-width: 577px) {
+    .mod_confprogram-list table.confprogram-list-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    .mod_confprogram-list table.confprogram-list-table th,
+    .mod_confprogram-list table.confprogram-list-table td {
+        overflow-wrap: break-word;
+    }
+}
+
 @media (max-width: 576px) {
     .mod_confprogram-list table.confprogram-list-table,
     .mod_confprogram-list table.confprogram-list-table thead,
