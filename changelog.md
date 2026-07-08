@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- User request (2026-07-08): reworked the Display-phase "Accepted
+  submissions" list's "All days" view. It previously rendered one
+  independent `<table>` per day (a heading + a fresh table each time), so
+  two days with differently-lengthed cell content ended up with visibly
+  different column widths -- "fixed" in an earlier pass with
+  `table-layout: fixed`, which forced every column to the SAME width
+  regardless of role (e.g. the one-character Favourite column as wide as
+  Title), a different but equally wrong result. Replaced with a single
+  merged "table" spanning every day at once, built from styled `<div>`s
+  with explicit `role="table"/"row"/"columnheader"/"cell"/"rowheader"` (the
+  WAI-ARIA APG "table" pattern) instead of a real `<table>`: a full-width
+  "date band" row (`role="rowheader"`) now marks each day change instead of
+  a separate heading + table, and every column gets an explicit,
+  role-appropriate width (title widest, favourite narrowest) via one shared
+  `grid-template-columns` value, so widths are consistent by construction.
+  The `<div>`-based approach (rather than a real `<table>`) is specifically
+  so the mobile breakpoint can collapse each item's fields into exactly two
+  rows via CSS Grid's `grid-auto-flow: column`, which auto-distributes
+  however many organiser-configured fields exist into two rows with no
+  hardcoded field-pairing -- something a real `<table>` can't do at a
+  breakpoint without knowing the field count in advance. Verified via
+  Playwright: correct ARIA role counts, proportionate columns and date
+  bands on desktop, 2-row auto-flow per item on mobile, single-day view
+  unaffected (no date band), and the favourite-toggle AJAX/submission-detail
+  modal both still work with the new markup.
 - User request (2026-07-07): the Decision report's Title cell now shows an
   "Edit" link into `mod_confsubmissions`'s `edit.php` for anyone holding
   that plugin's new `mod/confsubmissions:editany` capability (granted by

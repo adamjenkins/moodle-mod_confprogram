@@ -17,9 +17,9 @@
 /**
  * Styles for mod_confprogram's Display-phase accepted-submissions list.
  *
- * Modest, targeted CSS only: mostly making the list-table readable on narrow
- * screens (a stacked "card" layout below the breakpoint) rather than a full visual
- * redesign, since the list otherwise reuses standard generaltable/Bootstrap classes.
+ * The list itself (.confprogram-grid, below) is a CSS Grid-based WAI-ARIA "table"
+ * pattern, not a real <table> -- see that rule's own comment for why. Everything
+ * else here is modest, targeted CSS reusing standard Bootstrap classes.
  */
 
 .mod_confprogram-list .confprogram-favourite-toggle {
@@ -52,15 +52,16 @@
  * the "Withdrawn" badge itself, both of which should keep displaying normally). Mirrors
  * mod_confscheduler's identical treatment of the same underlying 'withdrawn' status on its
  * own Display-mode grid block.
+ *
+ * The background/colour itself is set per breakpoint below (desktop applies it to each
+ * role="cell" individually, since the row wrapper is display: contents there and has no
+ * box of its own to paint -- see the "All days" comment further down); this rule (a plain
+ * class selector, not tag-qualified, since the row is a <div role="row">, not a <tr>) only
+ * needs to hold the parts that don't depend on the row wrapper's own box.
  */
-.mod_confprogram-list tr.confprogram-row-withdrawn {
-    background: #f1f1f1;
-    color: #6c757d;
-}
-
-.mod_confprogram-list tr.confprogram-row-withdrawn .confprogram-open-detail,
-.mod_confprogram-list tr.confprogram-row-withdrawn .confprogram-schedule,
-.mod_confprogram-list tr.confprogram-row-withdrawn .mod_confprogram-track-pill {
+.mod_confprogram-list .confprogram-row-withdrawn .confprogram-open-detail,
+.mod_confprogram-list .confprogram-row-withdrawn .confprogram-schedule,
+.mod_confprogram-list .confprogram-row-withdrawn .mod_confprogram-track-pill {
     text-decoration: line-through;
 }
 
@@ -69,61 +70,133 @@
 }
 
 /*
- * "All days" mode (view.php) renders one independent <table> per day, all sharing the
- * same column set ($listfields/$showtrackpill are computed once, outside the per-day
- * loop) but each browser-auto-sized to ITS OWN day's cell content -- so two days with
- * differently-lengthed titles/values ended up with visibly different column widths
- * (user report, 2026-07-07). table-layout: fixed makes a table split its width evenly
- * across columns regardless of content length, so every same-column-count table at the
- * same container width (100%, one per line) lands on identical widths. Scoped above
- * the mobile breakpoint below, which turns the table into a stacked block layout where
- * table-layout has no effect anyway, but kept explicit for clarity.
+ * The Display-phase accepted-submissions list (view.php) is a single WAI-ARIA APG
+ * "table" pattern built from styled <div>s (role="table"/"row"/"columnheader"/"cell"/
+ * "rowheader"), not a real <table> -- see view.php's own comment at the top of this
+ * section for why (in short: the mobile 2-row collapse below needs CSS Grid's
+ * grid-auto-flow: column to auto-distribute an organiser-configurable, not fixed,
+ * number of fields, which a real <table> can't do without hardcoding field pairs).
+ *
+ * ONE shared grid spans every day at once (previously: a heading + an independent
+ * <table> PER DAY, each browser-auto-sized to only its own day's content, which is
+ * exactly why two days with differently-lengthed values ended up with visibly
+ * different column widths -- user report, 2026-07-07). A full-width "date band" row
+ * (.confprogram-date-band-cell, role="rowheader") is inserted between days instead of
+ * a separate heading + table, and every column gets an explicit, role-appropriate
+ * width (title widest, favourite narrowest -- see view.php's $colwidths) via the
+ * --confprogram-grid-cols custom property view.php sets inline on .confprogram-grid,
+ * rather than every table guessing its own widths from its own content and
+ * (user report, 2026-07-08) landing on a DIFFERENT wrong result when a later fix
+ * forced every column to the same width regardless of role.
  */
 @media (min-width: 577px) {
-    .mod_confprogram-list table.confprogram-list-table {
-        table-layout: fixed;
+    .mod_confprogram-list .confprogram-grid {
+        display: grid;
+        grid-template-columns: var(--confprogram-grid-cols);
+        column-gap: 0.75rem;
         width: 100%;
     }
 
-    .mod_confprogram-list table.confprogram-list-table th,
-    .mod_confprogram-list table.confprogram-list-table td {
+    /*
+     * display: contents makes each row wrapper disappear from the box tree (it stays
+     * in the DOM/accessibility tree -- its role="row" is unaffected) so its
+     * role="cell"/"columnheader" children become direct children of .confprogram-grid
+     * and line up against every other row's cells in the SAME shared grid. This is
+     * what makes column widths consistent across date bands without needing CSS
+     * Subgrid (patchier browser support) or per-column JS measurement.
+     */
+    .mod_confprogram-list .confprogram-grid-header,
+    .mod_confprogram-list .confprogram-date-band,
+    .mod_confprogram-list .confprogram-row-item {
+        display: contents;
+    }
+
+    /* Spans every column so the auto-placement algorithm skips straight to the next
+     * grid row afterwards, regardless of how many real columns this instance has. */
+    .mod_confprogram-list .confprogram-date-band-cell {
+        grid-column: 1 / -1;
+    }
+
+    .mod_confprogram-list .confprogram-grid [role="cell"],
+    .mod_confprogram-list .confprogram-grid [role="columnheader"] {
+        padding: 0.5rem 0.25rem;
         overflow-wrap: break-word;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .mod_confprogram-list .confprogram-grid [role="columnheader"] {
+        font-weight: 700;
+        border-bottom-width: 2px;
+    }
+
+    /* A row wrapper is display: contents (no box of its own -- see above), so the
+     * withdrawn treatment is applied to each of ITS cells individually instead of the
+     * row; adjacent cells in the same grid row still read as one continuous grey band. */
+    .mod_confprogram-list .confprogram-row-withdrawn [role="cell"] {
+        background: #f1f1f1;
+        color: #6c757d;
     }
 }
 
 @media (max-width: 576px) {
-    .mod_confprogram-list table.confprogram-list-table,
-    .mod_confprogram-list table.confprogram-list-table thead,
-    .mod_confprogram-list table.confprogram-list-table tbody,
-    .mod_confprogram-list table.confprogram-list-table th,
-    .mod_confprogram-list table.confprogram-list-table td,
-    .mod_confprogram-list table.confprogram-list-table tr {
-        display: block;
-    }
-
-    .mod_confprogram-list table.confprogram-list-table thead tr {
+    /* Visually hidden but still reachable by screen readers (unlike display: none),
+     * matching the desktop column headers' meaning -- each cell already carries its
+     * own data-label below, so sighted mobile users don't need the header repeated. */
+    .mod_confprogram-list .confprogram-grid-header {
         position: absolute;
         top: -9999px;
         left: -9999px;
     }
 
-    .mod_confprogram-list table.confprogram-list-table tr {
+    .mod_confprogram-list .confprogram-date-band {
+        display: block;
+        margin: 1rem 0 0.5rem;
+    }
+
+    .mod_confprogram-list .confprogram-date-band-cell {
+        display: block;
+        font-weight: 700;
+        padding: 0.85rem 0.5rem;
+        background: #eef1f5;
+        border-radius: 0.25rem;
+    }
+
+    /*
+     * Each submission is its own self-contained 2-row grid (not part of one page-wide
+     * grid the way desktop is -- see the display: contents comment above): however
+     * many role="cell" children it has (varies per organiser-configured field set),
+     * grid-auto-flow: column with exactly two explicit rows packs them column-by-
+     * column, auto-generating however many implicit columns are needed, so the layout
+     * always collapses to precisely two rows regardless of field count.
+     */
+    .mod_confprogram-list .confprogram-row-item {
+        display: grid;
+        grid-template-rows: repeat(2, auto);
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        column-gap: 0.75rem;
         margin-bottom: 1rem;
         border: 1px solid #dee2e6;
         border-radius: 0.25rem;
         padding: 0.5rem;
     }
 
-    .mod_confprogram-list table.confprogram-list-table td {
-        border: none;
+    .mod_confprogram-list .confprogram-row-item [role="cell"] {
         padding: 0.25rem 0;
+        min-width: 0;
+        overflow-wrap: break-word;
     }
 
-    .mod_confprogram-list table.confprogram-list-table td::before {
+    .mod_confprogram-list .confprogram-row-item [role="cell"]::before {
         content: attr(data-label);
         display: block;
         font-weight: bold;
         font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .mod_confprogram-list .confprogram-row-withdrawn {
+        background: #f1f1f1;
         color: #6c757d;
     }
 }

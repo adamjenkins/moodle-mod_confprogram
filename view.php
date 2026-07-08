@@ -333,117 +333,177 @@ if ($confprogram->phase === 'review') {
         ]));
     }
 
+    // ---------------------------------------------------------------------------
+    // Single merged accessible "table" spanning every day at once, replacing the
+    // previous one-<table>-per-day layout. That old layout meant a heading
+    // followed by an independently browser-auto-sized <table> per day; two days
+    // with differently-lengthed cell content ended up with visibly different
+    // column widths (user report, 2026-07-07), "fixed" at the time with
+    // `table-layout: fixed` -- which forced every column to the SAME width
+    // regardless of its actual content (e.g. the one-character Favourite column
+    // as wide as Title), a different but equally wrong result (user report,
+    // 2026-07-08). Root problem: N separate tables can never reliably agree on
+    // column widths with each other, since each one is browser-sized on its own.
+    //
+    // Fix: one shared grid container for the WHOLE list (every day, all at
+    // once), with a single header row and a full-width "date band" row
+    // (role="rowheader", grid-column: 1 / -1 in styles.css) inserted whenever
+    // the day changes, instead of a heading + a whole new table. Every column
+    // now gets an explicit, role-appropriate width (title widest, favourite
+    // narrowest) via one shared grid-template-columns value computed below, so
+    // widths are consistent by construction rather than by coincidence.
+    //
+    // Built from styled <div>s with explicit role="table"/"row"/"columnheader"/
+    // "cell"/"rowheader" (the WAI-ARIA APG "table" pattern) rather than a real
+    // <table>, specifically so the mobile breakpoint (styles.css) can collapse
+    // each item's fields into exactly two rows via CSS Grid's
+    // grid-auto-flow: column. The number of columns here is organiser-
+    // configurable ($listfields/$showtrackpill), so a real <table> would need
+    // to hardcode which fields pair up on a mobile screen and break whenever
+    // that configuration changes; grid-auto-flow: column auto-distributes
+    // however many fields there are into exactly two rows with no hardcoding.
+    // Desktop and mobile share the SAME markup: every row wrapper is
+    // `display: contents` on desktop (so its cells become direct children of
+    // the one shared grid, keeping columns aligned across date bands) and a
+    // self-contained 2-row grid on mobile (see styles.css) -- the row wrapper
+    // is never removed from the DOM, only its own display mode changes.
+    $colroles = ['title'];
+    $headercells = [get_string('title', 'mod_confsubmissions')];
+    if ($showtrackpill) {
+        $colroles[] = 'track';
+        $headercells[] = get_string('track', 'mod_confsubmissions');
+    }
+    foreach ($listfields as $fieldname) {
+        $colroles[] = 'field';
+        $headercells[] = field_formatter::get_label($fieldname);
+    }
+    $colroles[] = 'schedule';
+    $headercells[] = get_string('timeandroom', 'mod_confprogram');
+    $colroles[] = 'favourite';
+    $headercells[] = get_string('favourite', 'mod_confprogram');
+
+    // One width per column ROLE, not per column index -- robust regardless of
+    // how many optional fields ($listfields) an organiser has configured for
+    // this instance's list view.
+    $colwidths = [
+        'title'     => 'minmax(12rem, 2fr)',
+        'track'     => 'minmax(6rem, auto)',
+        'field'     => 'minmax(7rem, 1fr)',
+        'schedule'  => 'minmax(11rem, auto)',
+        'favourite' => '3.25rem',
+    ];
+    $gridtemplate = implode(' ', array_map(fn($role) => $colwidths[$role], $colroles));
+
+    $renderheaderrow = function (array $headercells): string {
+        $cellshtml = '';
+        foreach ($headercells as $label) {
+            $cellshtml .= html_writer::div($label, '', ['role' => 'columnheader']);
+        }
+        return html_writer::div($cellshtml, 'confprogram-grid-header', ['role' => 'row']);
+    };
+
+    // Renders a full-width "date band" row: a single role="rowheader" cell
+    // spanning every column, replacing the old per-day $OUTPUT->heading() call
+    // -- see this section's opening comment.
+    $renderdateband = function (string $key): string {
+        $label = $key === 'unscheduled'
+            ? get_string('unscheduled', 'mod_confprogram')
+            : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
+
+        $cell = html_writer::div($label, 'confprogram-date-band-cell', ['role' => 'rowheader']);
+        return html_writer::div($cell, 'confprogram-date-band', ['role' => 'row']);
+    };
+
+    // Renders one submission's row: a role="row" wrapper around one role="cell"
+    // div per column. Cell CONTENT logic is unchanged from before this rewrite,
+    // only the markup it's wrapped in (div/role instead of html_table_cell).
+    $renderitemrow = function (\stdClass $row) use ($listfields, $showtrackpill, $cm, $canfavourite, $USER): string {
+        $submission = $row->submission;
+
+        // A submission this confprogram instance already accepted (possibly already
+        // scheduled) can be withdrawn afterwards by its own submitter, entirely inside
+        // mod_confsubmissions -- there is no cross-plugin cascade/notification when
+        // that happens (see RELATIONS.md). Rather than silently continuing to list it
+        // as if nothing changed, flag the row here so a viewer isn't misled into
+        // thinking it's still happening (user request, 2026-07-07): greyed out
+        // (.confprogram-row-withdrawn, in styles.css, mirrors mod_confscheduler's
+        // identical Display-mode treatment of the same 'withdrawn' status) with a
+        // strikethrough on specific inner elements (not full-row text, which would
+        // also strike through the favourite-star icon glyph and the "Withdrawn"
+        // badge itself, both of which should keep displaying normally), plus an
+        // explicit "Withdrawn" badge next to the title, since colour/strikethrough
+        // alone isn't reliably conveyed to everyone (e.g. screen reader users,
+        // colour-blind users).
+        $iswithdrawn = $submission->status === 'withdrawn';
+        $rowclasses = ['confprogram-row-item'];
+        if ($iswithdrawn) {
+            $rowclasses[] = 'confprogram-row-withdrawn';
+        }
+
+        $titlelink = html_writer::link('#', format_string($submission->title), [
+            'class'              => 'confprogram-open-detail',
+            'data-cmid'          => $cm->id,
+            'data-submissionid'  => $submission->id,
+        ]);
+        $titlecontent = $titlelink;
+        if ($iswithdrawn) {
+            $titlecontent .= ' ' . html_writer::tag(
+                'span',
+                get_string('status_withdrawn', 'mod_confsubmissions'),
+                ['class' => 'badge badge-secondary confprogram-withdrawn-badge']
+            );
+        }
+        $cellshtml = html_writer::div($titlecontent, '', [
+            'role' => 'cell', 'data-label' => get_string('title', 'mod_confsubmissions'),
+        ]);
+
+        if ($showtrackpill) {
+            $cellshtml .= html_writer::div(field_formatter::get_track_pill_html($submission), '', [
+                'role' => 'cell', 'data-label' => get_string('track', 'mod_confsubmissions'),
+            ]);
+        }
+
+        foreach ($listfields as $fieldname) {
+            $value = field_formatter::format_value($fieldname, $submission);
+            $cellshtml .= html_writer::div(s($value), '', [
+                'role' => 'cell', 'data-label' => field_formatter::get_label($fieldname),
+            ]);
+        }
+
+        $scheduletext = schedule_info::format_for_display(schedule_info::get_for_submission((int) $submission->id));
+        $cellshtml .= html_writer::div(s($scheduletext), 'confprogram-schedule', [
+            'role' => 'cell', 'data-label' => get_string('timeandroom', 'mod_confprogram'),
+        ]);
+
+        if ($canfavourite) {
+            $isfavourited = api::is_favourited((int) $USER->id, (int) $submission->id);
+            $starlabel = $isfavourited
+                ? get_string('unfavourite', 'mod_confprogram')
+                : get_string('favourite', 'mod_confprogram');
+            $favcontent = html_writer::tag('button', html_writer::tag('i', '', [
+                'class'       => $isfavourited ? 'icon fa fa-star' : 'icon fa fa-star-o',
+                'aria-hidden' => 'true',
+            ]) . html_writer::tag('span', $starlabel, ['class' => 'sr-only']), [
+                'type'              => 'button',
+                'class'             => 'confprogram-favourite-toggle' . ($isfavourited ? ' confprogram-favourited' : ''),
+                'data-cmid'         => $cm->id,
+                'data-submissionid' => $submission->id,
+                'data-favourited'   => $isfavourited ? '1' : '0',
+                'aria-pressed'      => $isfavourited ? 'true' : 'false',
+            ]);
+        } else {
+            $favcontent = '';
+        }
+        $cellshtml .= html_writer::div($favcontent, '', [
+            'role' => 'cell', 'data-label' => get_string('favourite', 'mod_confprogram'),
+        ]);
+
+        return html_writer::div($cellshtml, implode(' ', $rowclasses), ['role' => 'row']);
+    };
+
     $groups = display_list::group_by_day($decorated);
     $daykeys = array_keys($groups);
     $showdayselector = !($daykeys === ['unscheduled']);
-
-    // Renders one day's (or the whole flat list's) rows as a single table. Shared by
-    // the single-day path below and the "All days" path (user feedback, 2026-07-05),
-    // which calls this once per day instead of once for a single selected day.
-    $rendertable = function (array $rows) use ($listfields, $showtrackpill, $cm, $canfavourite, $USER) {
-        if (!$rows) {
-            return false;
-        }
-
-        $table = new html_table();
-        $table->attributes['class'] = 'generaltable confprogram-list-table';
-        $head = [get_string('title', 'mod_confsubmissions')];
-        if ($showtrackpill) {
-            $head[] = get_string('track', 'mod_confsubmissions');
-        }
-        foreach ($listfields as $fieldname) {
-            $head[] = field_formatter::get_label($fieldname);
-        }
-        $head[] = get_string('timeandroom', 'mod_confprogram');
-        $head[] = get_string('favourite', 'mod_confprogram');
-        $table->head = $head;
-
-        foreach ($rows as $row) {
-            $submission = $row->submission;
-            $data = [];
-
-            // A submission this confprogram instance already accepted (possibly already
-            // scheduled) can be withdrawn afterwards by its own submitter, entirely inside
-            // mod_confsubmissions -- there is no cross-plugin cascade/notification when
-            // that happens (see RELATIONS.md). Rather than silently continuing to list it
-            // as if nothing changed, flag the row here so a viewer isn't misled into
-            // thinking it's still happening (user request, 2026-07-07): greyed out with a
-            // strikethrough across the row (.confprogram-row-withdrawn, in styles.css,
-            // mirrors mod_confscheduler's identical Display-mode treatment of the same
-            // 'withdrawn' status), plus an explicit "Withdrawn" badge next to the title,
-            // since colour/strikethrough alone isn't reliably conveyed to everyone (e.g.
-            // screen reader users, colour-blind users).
-            $iswithdrawn = $submission->status === 'withdrawn';
-            if ($iswithdrawn) {
-                $rowindex = count($table->data);
-                $table->rowclasses[$rowindex] = 'confprogram-row-withdrawn';
-            }
-
-            $titlelink = html_writer::link('#', format_string($submission->title), [
-                'class'              => 'confprogram-open-detail',
-                'data-cmid'          => $cm->id,
-                'data-submissionid'  => $submission->id,
-            ]);
-            $titlecontent = $titlelink;
-            if ($iswithdrawn) {
-                $titlecontent .= ' ' . html_writer::tag(
-                    'span',
-                    get_string('status_withdrawn', 'mod_confsubmissions'),
-                    ['class' => 'badge badge-secondary confprogram-withdrawn-badge']
-                );
-            }
-            $titlecell = new html_table_cell($titlecontent);
-            $titlecell->attributes['data-label'] = get_string('title', 'mod_confsubmissions');
-            $data[] = $titlecell;
-
-            if ($showtrackpill) {
-                $trackcell = new html_table_cell(field_formatter::get_track_pill_html($submission));
-                $trackcell->attributes['data-label'] = get_string('track', 'mod_confsubmissions');
-                $data[] = $trackcell;
-            }
-
-            foreach ($listfields as $fieldname) {
-                $value = field_formatter::format_value($fieldname, $submission);
-                $cell = new html_table_cell(s($value));
-                $cell->attributes['data-label'] = field_formatter::get_label($fieldname);
-                $data[] = $cell;
-            }
-
-            $scheduletext = schedule_info::format_for_display(schedule_info::get_for_submission((int) $submission->id));
-            $schedulecell = new html_table_cell(s($scheduletext));
-            $schedulecell->attributes['data-label'] = get_string('timeandroom', 'mod_confprogram');
-            $schedulecell->attributes['class'] .= ' confprogram-schedule';
-            $data[] = $schedulecell;
-
-            if ($canfavourite) {
-                $isfavourited = api::is_favourited((int) $USER->id, (int) $submission->id);
-                $starlabel = $isfavourited
-                    ? get_string('unfavourite', 'mod_confprogram')
-                    : get_string('favourite', 'mod_confprogram');
-                $starbutton = html_writer::tag('button', html_writer::tag('i', '', [
-                    'class'       => $isfavourited ? 'icon fa fa-star' : 'icon fa fa-star-o',
-                    'aria-hidden' => 'true',
-                ]) . html_writer::tag('span', $starlabel, ['class' => 'sr-only']), [
-                    'type'              => 'button',
-                    'class'             => 'confprogram-favourite-toggle' . ($isfavourited ? ' confprogram-favourited' : ''),
-                    'data-cmid'         => $cm->id,
-                    'data-submissionid' => $submission->id,
-                    'data-favourited'   => $isfavourited ? '1' : '0',
-                    'aria-pressed'      => $isfavourited ? 'true' : 'false',
-                ]);
-                $favcell = new html_table_cell($starbutton);
-            } else {
-                $favcell = new html_table_cell('');
-            }
-            $favcell->attributes['data-label'] = get_string('favourite', 'mod_confprogram');
-            $data[] = $favcell;
-
-            $table->data[] = $data;
-        }
-
-        echo html_writer::table($table);
-        return true;
-    };
 
     // All-days view (user feedback, 2026-07-05): every day's group rendered as its own
     // heading + table, one after another, instead of a single day at a time. A plain
@@ -504,26 +564,32 @@ if ($confprogram->phase === 'review') {
     // one.
     $PAGE->requires->js_call_amd('mod_confprogram/programlist', 'init');
 
-    if ($isalldays) {
-        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
-        $anyrendered = false;
-        foreach ($daykeys as $key) {
-            $heading = $key === 'unscheduled'
-                ? get_string('unscheduled', 'mod_confprogram')
-                : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
-            echo $OUTPUT->heading($heading, 4, 'mod_confprogram-day-heading');
-            $anyrendered = $rendertable($groups[$key]) || $anyrendered;
-        }
-        echo html_writer::end_tag('div');
-        if (!$anyrendered) {
-            echo $OUTPUT->notification(get_string('noacceptedsubmissions', 'mod_confprogram'), 'info');
-        }
-    } else if ($rows) {
-        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
-        $rendertable($rows);
-        echo html_writer::end_tag('div');
-    } else {
+    $totalrows = $isalldays ? array_sum(array_map('count', $groups)) : count($rows);
+
+    if ($totalrows === 0) {
         echo $OUTPUT->notification(get_string('noacceptedsubmissions', 'mod_confprogram'), 'info');
+    } else {
+        $gridcontent = $renderheaderrow($headercells);
+        if ($isalldays) {
+            foreach ($daykeys as $key) {
+                $gridcontent .= $renderdateband($key);
+                foreach ($groups[$key] as $row) {
+                    $gridcontent .= $renderitemrow($row);
+                }
+            }
+        } else {
+            foreach ($rows as $row) {
+                $gridcontent .= $renderitemrow($row);
+            }
+        }
+
+        echo html_writer::start_tag('div', ['class' => 'mod_confprogram-list']);
+        echo html_writer::div($gridcontent, 'confprogram-grid', [
+            'role'       => 'table',
+            'aria-label' => get_string('acceptedsubmissions', 'mod_confprogram'),
+            'style'      => '--confprogram-grid-cols: ' . $gridtemplate . ';',
+        ]);
+        echo html_writer::end_tag('div');
     }
 }
 
