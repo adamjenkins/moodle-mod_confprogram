@@ -26,6 +26,7 @@ The activity runs in two phases, switched from edit mode.
 **Display phase**
 
 - A responsive, filterable list of accepted submissions with a **favourite** star, kept in sync with Conference Scheduler's time/room and "my timetable" state. Multiple days render as a single accessible table with consistent, sensibly-proportioned column widths and date-band divider rows, collapsing to a mobile-friendly two-row layout on narrow screens. Accepts `?trackid=X` to filter to one track (the target of the scheduler's track pills).
+- **Display settings** (reachable from edit mode in either phase) choose which submission fields appear in the list and in the detail modal.
 
 **Both phases**
 
