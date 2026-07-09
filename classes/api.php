@@ -111,6 +111,40 @@ class api {
     }
 
     /**
+     * Bulk companion to count_favourites() (FABLE.md review, 2026-07-09): favourite
+     * counts for MANY submissions in one GROUP BY query, instead of one COUNT query
+     * per submission -- mod_confscheduler's grid payload previously called
+     * count_favourites() per scheduled slot. Same not-instance-scoped semantics
+     * (and the same documented limitation) as count_favourites() above.
+     *
+     * @param int[] $submissionids The mod_confsubmissions confsubmissions_submission ids
+     * @return array<int, int> Favourite counts keyed by submissionid; every requested id present
+     */
+    public static function count_favourites_for_submissions(array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        $counts = array_fill_keys($submissionids, 0);
+        [$insql, $params] = $DB->get_in_or_equal($submissionids);
+        $rows = $DB->get_records_sql(
+            "SELECT submissionid, COUNT(1) AS favouritecount
+               FROM {confprogram_favourite}
+              WHERE submissionid $insql
+           GROUP BY submissionid",
+            $params
+        );
+        foreach ($rows as $row) {
+            $counts[(int) $row->submissionid] = (int) $row->favouritecount;
+        }
+
+        return $counts;
+    }
+
+    /**
      * Whether a user has favourited a submission.
      *
      * @param int $userid The user id

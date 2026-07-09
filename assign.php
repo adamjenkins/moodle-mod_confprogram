@@ -94,7 +94,7 @@ if ($confprogram->phase !== 'review') {
 }
 
 // Handle POST actions before rendering.
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (data_submitted()) {
     require_sesskey();
 
     if ($removeid = optional_param('removeassignment', 0, PARAM_INT)) {
@@ -251,7 +251,10 @@ foreach ($submissions as $submission) {
     foreach ($eligiblereviewers as $reviewer) {
         $reviewerselect[$reviewer->id] = fullname($reviewer);
     }
-    $assigncell = html_writer::select($reviewerselect, 'reviewerselect_' . $submission->id, 0, null)
+    $assigncell = html_writer::select($reviewerselect, 'reviewerselect_' . $submission->id, 0, null, [
+        // Names WHICH submission this per-row select assigns a reviewer to (WCAG 4.1.2).
+        'aria-label' => get_string('assignreviewer', 'mod_confprogram') . ': ' . format_string($submission->title),
+    ])
         . ' '
         . html_writer::tag('button', get_string('assignreviewer', 'mod_confprogram'), [
             'type'  => 'submit',

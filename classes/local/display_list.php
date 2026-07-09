@@ -65,8 +65,16 @@ class display_list {
     public static function filter_accepted(array $submissions, int $confprogramid): array {
         $accepted = [];
 
+        // One bulk query for every submission's latest decision, not one per row
+        // (FABLE.md review, 2026-07-09) -- semantics identical to calling
+        // rounds::get_latest_decision() per submission.
+        $latest = rounds::get_latest_decisions(
+            $confprogramid,
+            array_map(static fn($submission): int => (int) $submission->id, $submissions)
+        );
+
         foreach ($submissions as $submission) {
-            $decision = rounds::get_latest_decision($confprogramid, (int) $submission->id);
+            $decision = $latest[(int) $submission->id] ?? null;
             if ($decision !== null && $decision->decision === 'accept') {
                 $accepted[] = $submission;
             }
@@ -196,12 +204,16 @@ class display_list {
         $best = null;
         $bestdiff = null;
 
-        foreach (array_keys($groups) as $key) {
+        foreach ($groups as $key => $rows) {
             if ($key === 'unscheduled') {
                 continue;
             }
-            $timestamp = strtotime($key . ' 00:00:00');
-            if ($timestamp === false) {
+            // Compare using a real timestamp from the group's own rows, not
+            // strtotime($key): the key was built by userdate() in the USER's
+            // timezone, and strtotime() would re-parse it in the SERVER's --
+            // for users west of the server that skewed "nearest day" by one.
+            $timestamp = (int) ($rows[0]->schedule['starttime'] ?? 0);
+            if (!$timestamp) {
                 continue;
             }
             $diff = abs($timestamp - $now);

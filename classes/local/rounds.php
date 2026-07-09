@@ -95,6 +95,50 @@ class rounds {
     }
 
     /**
+     * Bulk companion to get_latest_decision() (FABLE.md review, 2026-07-09):
+     * resolves the most recent decision for MANY submissions in one query,
+     * instead of one query per submission -- display_list::filter_accepted()
+     * previously called get_latest_decision() per row on the public
+     * Display-phase list, the single biggest contributor to that page's
+     * per-row query count.
+     *
+     * Same per-submission semantics as get_latest_decision(): highest round
+     * wins, ties broken by most recent timecreated. A submission with no
+     * decision is simply absent from the result.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int[] $submissionids The mod_confsubmissions confsubmissions_submission ids
+     * @return array<int, \stdClass> Latest decision rows keyed by submissionid
+     */
+    public static function get_latest_decisions(int $confprogramid, array $submissionids): array {
+        global $DB;
+
+        $submissionids = array_values(array_unique(array_map('intval', $submissionids)));
+        if (!$submissionids) {
+            return [];
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($submissionids, SQL_PARAMS_NAMED);
+        $params['confprogram'] = $confprogramid;
+
+        // Ascending order + overwrite-per-key: the LAST row seen for each
+        // submissionid is its (round DESC, timecreated DESC) winner.
+        $rows = $DB->get_records_select(
+            'confprogram_decision',
+            "confprogram = :confprogram AND submissionid $insql",
+            $params,
+            'round ASC, timecreated ASC, id ASC'
+        );
+
+        $latest = [];
+        foreach ($rows as $row) {
+            $latest[(int) $row->submissionid] = $row;
+        }
+
+        return $latest;
+    }
+
+    /**
      * Returns the review round a submission is currently in, per the rule
      * documented on this class.
      *

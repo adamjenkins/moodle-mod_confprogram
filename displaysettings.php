@@ -53,7 +53,7 @@ $PAGE->set_context($context);
 $confsubmissionscm = get_coursemodule_from_id('confsubmissions', $confprogram->confsubmissionscmid, 0, false, MUST_EXIST);
 $availablefields = field_settings::get_available_fields((int) $confsubmissionscm->instance);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (data_submitted()) {
     require_sesskey();
 
     $tosave = [];
@@ -76,6 +76,10 @@ echo $OUTPUT->heading(get_string('displaysettings', 'mod_confprogram'), 3);
 
 echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out_omit_querystring()]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+// The form action strips the query string, so the cmid must ride along as a
+// hidden field -- without it every save died on required_param('id') (FABLE.md
+// review, 2026-07-09: this screen had never been able to save at all).
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
 
 $table = new html_table();
 $table->head = [
@@ -87,10 +91,18 @@ $table->attributes['class'] = 'generaltable';
 
 foreach ($availablefields as $fieldname) {
     $fieldsettings = $settings[$fieldname];
+    $fieldlabel = field_formatter::get_label($fieldname);
+    // Each checkbox carries an aria-label naming both the column and the field:
+    // its visible <label> is empty, so without this a screen reader announces
+    // two indistinguishable unnamed checkboxes per row (WCAG 4.1.2).
     $table->data[] = [
-        field_formatter::get_label($fieldname),
-        html_writer::checkbox('showinlist_' . $fieldname, 1, (bool) $fieldsettings->showinlist, ''),
-        html_writer::checkbox('showinmodal_' . $fieldname, 1, (bool) $fieldsettings->showinmodal, ''),
+        $fieldlabel,
+        html_writer::checkbox('showinlist_' . $fieldname, 1, (bool) $fieldsettings->showinlist, '', [
+            'aria-label' => get_string('showinlist', 'mod_confprogram') . ': ' . $fieldlabel,
+        ]),
+        html_writer::checkbox('showinmodal_' . $fieldname, 1, (bool) $fieldsettings->showinmodal, '', [
+            'aria-label' => get_string('showinmodal', 'mod_confprogram') . ': ' . $fieldlabel,
+        ]),
     ];
 }
 

@@ -132,9 +132,15 @@ class notifier {
         $template = self::get_template($confprogramid);
         $course = get_course((int) $confprogram->course);
 
-        $context = [
-            'submissiontitle' => format_string($submission->title),
-            'coursename'      => format_string($course->fullname),
+        // Raw (filtered but unescaped) values: the plain-text subject and a
+        // FORMAT_PLAIN body are escaped exactly once at their own output boundary
+        // (send() wraps a plain body in s()); only a FORMAT_HTML body -- sent
+        // verbatim as fullmessagehtml -- gets pre-escaped values. Substituting
+        // escaped values everywhere put literal entities ("D&#39;Arcy") in
+        // subjects (FABLE.md review, 2026-07-09).
+        $rawcontext = [
+            'submissiontitle' => format_string($submission->title, true, ['escape' => false]),
+            'coursename'      => format_string($course->fullname, true, ['escape' => false]),
             // Reuses this plugin's existing decision_accept/decision_reject/
             // decision_waitlist display strings (decisions.php already uses the same
             // 'decision_' . $decision key convention) rather than inventing new ones.
@@ -150,12 +156,15 @@ class notifier {
                 continue;
             }
 
-            $speakercontext = $context + ['fullname' => format_string(fullname($touser))];
+            $speakerraw = $rawcontext + [
+                'fullname' => format_string(fullname($touser), true, ['escape' => false]),
+            ];
+            $bodycontext = $template['bodyformat'] === FORMAT_HTML ? array_map('s', $speakerraw) : $speakerraw;
 
             self::send(
                 $touser,
-                self::render($template['subject'], $speakercontext),
-                self::render($template['body'], $speakercontext),
+                self::render($template['subject'], $speakerraw),
+                self::render($template['body'], $bodycontext),
                 $template['bodyformat'],
                 (int) $confprogram->course
             );

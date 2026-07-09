@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+- Review fixes (2026-07-09, from the four-plugin FABLE.md review — see the
+  coordination repo):
+  - **Critical: `displaysettings.php` could never save** — its form posted to a
+    query-stripped URL with no hidden `id` field, so every save died on
+    `required_param('id')`. Reproduced live before fixing; the hidden field is
+    now emitted alongside `sesskey`. The page's per-row checkboxes also gained
+    aria-labels (they had empty visible labels).
+  - **Display-phase list no longer scales queries with rows** — the public
+    accepted-submissions list previously issued one latest-decision query per
+    submission, a duplicate schedule fetch per row, one `is_favourited()` per
+    row, one track query per row, and one optional-field-values query per row
+    per configured field. Now: a bulk `rounds::get_latest_decisions()`, the
+    already-attached `$row->schedule`, one `get_favourites()` call, and a new
+    `field_formatter::preload_for_submissions()` request cache backed by
+    `mod_confsubmissions`' new bulk read API. Single-submission callers (the
+    detail modal) are unchanged — every accessor falls back to its original
+    query when the cache is cold.
+  - **New `submissionid` indexes on `confprogram_favourite`/`confprogram_unvetted`**
+    (install.xml + upgrade step `2026070900`): `is_favourited()`,
+    `count_favourites()` and `is_unvetted()` filter by `submissionid` without
+    `confprogram`, which the existing unique keys' leading column cannot serve —
+    every call was a table scan, and `count_favourites()` runs per scheduled
+    slot in `mod_confscheduler`'s overbooking warning. Also added a bulk
+    `api::count_favourites_for_submissions()` for that consumer.
+  - **Day-band headings no longer skew a day for users west of the server** —
+    group labels (and the day-selector options, and `default_day_key()`) now
+    format a real timestamp from the group's own rows instead of re-parsing the
+    user-timezone group key with server-timezone `strtotime()`.
+  - **`feedback.php` rendering no longer writes to the database** —
+    `review_display` called `get_or_create_instance()` unguarded, which INSERTs
+    an orphan INCOMPLETE `grading_instances` row exactly when the review's
+    (id, raterid, itemid) triple no longer matches; a side-effect-free
+    `record_exists()` check now runs first.
+  - **GDPR erasure of a decider no longer empties the accepted programme** —
+    `confprogram_decision.decidedby` and `confprogram_unvetted.setby` are now
+    anonymised (set to 0) instead of the rows being deleted, matching core's
+    convention for shared workflow records; genuinely personal rows (reviews,
+    assignments, favourites, reviewermax) are still deleted. All three privacy
+    delete methods also gained the missing `$cm` false-guard, and the provider
+    now has real behavioural tests (`tests/privacy/provider_test.php`) — it had
+    regressed once before (`confprogram_review`) with only interface-existence
+    coverage.
+  - **Restore skips an assignment whose reviewer AND group are both unmappable**
+    instead of inserting a row violating the "exactly one is set" invariant.
+  - **Escaping fixes**: `fullname()` now escaped in `review_display`'s reviewer
+    heading and `review.php`'s speaker line (`html_writer::tag()` does not
+    escape); decision-notification subjects no longer carry HTML entities for
+    names like "D'Arcy" (raw vs escaped placeholder contexts, escaped once per
+    output format).
+  - **Smaller items**: decision redirects keep the active track/status filters
+    (`$decisionsreturnurl`); per-row selects on `assign.php`/`decisions.php`
+    carry aria-labels naming their submission; `$_SERVER['REQUEST_METHOD']`
+    checks replaced with `data_submitted()`; unused `reviewer` lang string
+    removed (en/ja); external tests now validate return structures via
+    `clean_returnvalue()`.
 - User request (2026-07-08): reworked the Display-phase "Accepted
   submissions" list's "All days" view. It previously rendered one
   independent `<table>` per day (a heading + a fresh table each time), so

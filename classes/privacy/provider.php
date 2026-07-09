@@ -334,6 +334,9 @@ class provider implements
         }
 
         $cm = get_coursemodule_from_id('confprogram', $context->instanceid);
+        if (!$cm) {
+            return;
+        }
         $confprogram = $DB->get_record('confprogram', ['id' => $cm->instance]);
         if (!$confprogram) {
             return;
@@ -363,6 +366,9 @@ class provider implements
             }
 
             $cm = get_coursemodule_from_id('confprogram', $context->instanceid);
+            if (!$cm) {
+                continue;
+            }
             $confprogram = $DB->get_record('confprogram', ['id' => $cm->instance]);
             if (!$confprogram) {
                 continue;
@@ -376,7 +382,16 @@ class provider implements
                 'confprogram' => $confprogram->id,
                 'userid'      => $userid,
             ]);
-            $DB->delete_records('confprogram_decision', [
+            // Decision and unvetted rows are institutional workflow records about
+            // SUBMISSIONS, keyed to a user only for provenance -- deleting them when
+            // the decider is erased would empty the live accepted programme
+            // (display_list::filter_accepted() finds no accept decisions) and strand
+            // already-synced confsubmissions statuses with no explanation (FABLE.md
+            // review, 2026-07-09). Core convention for shared records (forum grading,
+            // wiki authorship) is to anonymise, so the provenance column is zeroed
+            // and the record kept. Genuinely personal rows (assignments, reviews,
+            // favourites, reviewermax) are still deleted outright above/below.
+            $DB->set_field('confprogram_decision', 'decidedby', 0, [
                 'confprogram' => $confprogram->id,
                 'decidedby'   => $userid,
             ]);
@@ -384,7 +399,7 @@ class provider implements
                 'confprogram' => $confprogram->id,
                 'userid'      => $userid,
             ]);
-            $DB->delete_records('confprogram_unvetted', [
+            $DB->set_field('confprogram_unvetted', 'setby', 0, [
                 'confprogram' => $confprogram->id,
                 'setby'       => $userid,
             ]);
@@ -409,6 +424,9 @@ class provider implements
         }
 
         $cm = get_coursemodule_from_id('confprogram', $context->instanceid);
+        if (!$cm) {
+            return;
+        }
         $confprogram = $DB->get_record('confprogram', ['id' => $cm->instance]);
         if (!$confprogram) {
             return;
@@ -431,8 +449,11 @@ class provider implements
             "confprogram = ? AND userid $insql",
             array_merge([$confprogram->id], $params)
         );
-        $DB->delete_records_select(
+        // Anonymised, not deleted -- see delete_data_for_user()'s comment.
+        $DB->set_field_select(
             'confprogram_decision',
+            'decidedby',
+            0,
             "confprogram = ? AND decidedby $insql",
             array_merge([$confprogram->id], $params)
         );
@@ -441,8 +462,10 @@ class provider implements
             "confprogram = ? AND userid $insql",
             array_merge([$confprogram->id], $params)
         );
-        $DB->delete_records_select(
+        $DB->set_field_select(
             'confprogram_unvetted',
+            'setby',
+            0,
             "confprogram = ? AND setby $insql",
             array_merge([$confprogram->id], $params)
         );

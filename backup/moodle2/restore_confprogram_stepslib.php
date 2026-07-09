@@ -145,6 +145,15 @@ class restore_confprogram_activity_structure_step extends restore_activity_struc
             $data->reviewergroupid = $this->get_mappingid('group', $data->reviewergroupid) ?: null;
         }
 
+        // An assignment whose reviewer/group could not be mapped (e.g. userinfo
+        // restored into a site without those users) would violate the schema's
+        // "exactly one of the two is set" invariant and render as a dangling '-'
+        // row on assign.php -- skip it entirely, matching after_restore()'s own
+        // delete-rather-than-dangle policy for unmappable references.
+        if (empty($data->reviewerid) && empty($data->reviewergroupid)) {
+            return;
+        }
+
         $DB->insert_record('confprogram_assignment', $data);
     }
 

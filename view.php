@@ -73,7 +73,7 @@ $PAGE->set_context($context);
 
 // Phase toggle: only ever reachable in editing mode by a managereviewers holder, and
 // must run (and redirect) before any output is sent.
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && optional_param('togglephase', 0, PARAM_BOOL)) {
+if (data_submitted() && optional_param('togglephase', 0, PARAM_BOOL)) {
     require_sesskey();
     require_capability('mod/confprogram:managereviewers', $context);
 
@@ -300,12 +300,24 @@ if ($confprogram->phase === 'review') {
     $decorated = display_list::sort_by_schedule_then_title(display_list::attach_schedule($accepted));
     $decorated = display_list::filter_by_track($decorated, $trackid);
 
+    // Warm the per-row formatter caches (tracks, optional-field values, speaker
+    // names) in a handful of bulk queries, and fetch the viewer's favourites for
+    // this instance ONCE -- both replace one-query-per-row patterns on the
+    // plugin's most public page (FABLE.md review, 2026-07-09).
+    field_formatter::preload_for_submissions(array_map(static fn($row) => $row->submission, $decorated));
+
     $canfavourite = !isguestuser() && has_capability('mod/confprogram:favourite', $context);
+    $favouritedids = [];
+    if ($canfavourite || $favouritesonly) {
+        foreach (api::get_favourites((int) $USER->id, (int) $confprogram->id) as $favourite) {
+            $favouritedids[(int) $favourite->submissionid] = true;
+        }
+    }
 
     if ($favouritesonly) {
         $decorated = array_values(array_filter(
             $decorated,
-            fn($row) => api::is_favourited((int) $USER->id, (int) $row->submission->id)
+            fn($row) => isset($favouritedids[(int) $row->submission->id])
         ));
     }
 
@@ -402,22 +414,33 @@ if ($confprogram->phase === 'review') {
         return html_writer::div($cellshtml, 'confprogram-grid-header', ['role' => 'row']);
     };
 
+    // Formats a day-group's heading label from a REAL timestamp belonging to the
+    // group (its first row's schedule start), not by re-parsing the group key:
+    // the key was built by userdate() in the USER's timezone, and strtotime()
+    // re-parses in the SERVER's -- for users west of the server, the band above
+    // 9-July sessions used to read "8 July" (FABLE.md review, 2026-07-09).
+    $daylabel = function (string $key, array $rows): string {
+        if ($key === 'unscheduled') {
+            return get_string('unscheduled', 'mod_confprogram');
+        }
+        $timestamp = (int) ($rows[0]->schedule['starttime'] ?? 0);
+        return $timestamp
+            ? userdate($timestamp, get_string('strftimedate', 'langconfig'))
+            : $key;
+    };
+
     // Renders a full-width "date band" row: a single role="rowheader" cell
     // spanning every column, replacing the old per-day $OUTPUT->heading() call
     // -- see this section's opening comment.
-    $renderdateband = function (string $key): string {
-        $label = $key === 'unscheduled'
-            ? get_string('unscheduled', 'mod_confprogram')
-            : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
-
-        $cell = html_writer::div($label, 'confprogram-date-band-cell', ['role' => 'rowheader']);
+    $renderdateband = function (string $key, array $rows) use ($daylabel): string {
+        $cell = html_writer::div($daylabel($key, $rows), 'confprogram-date-band-cell', ['role' => 'rowheader']);
         return html_writer::div($cell, 'confprogram-date-band', ['role' => 'row']);
     };
 
     // Renders one submission's row: a role="row" wrapper around one role="cell"
     // div per column. Cell CONTENT logic is unchanged from before this rewrite,
     // only the markup it's wrapped in (div/role instead of html_table_cell).
-    $renderitemrow = function (\stdClass $row) use ($listfields, $showtrackpill, $cm, $canfavourite, $USER): string {
+    $renderitemrow = function (\stdClass $row) use ($listfields, $showtrackpill, $cm, $canfavourite, $favouritedids): string {
         $submission = $row->submission;
 
         // A submission this confprogram instance already accepted (possibly already
@@ -470,13 +493,16 @@ if ($confprogram->phase === 'review') {
             ]);
         }
 
-        $scheduletext = schedule_info::format_for_display(schedule_info::get_for_submission((int) $submission->id));
+        // $row->schedule was already fetched by display_list::attach_schedule() --
+        // this used to re-fetch it per row via schedule_info::get_for_submission()
+        // (FABLE.md review, 2026-07-09).
+        $scheduletext = schedule_info::format_for_display($row->schedule);
         $cellshtml .= html_writer::div(s($scheduletext), 'confprogram-schedule', [
             'role' => 'cell', 'data-label' => get_string('timeandroom', 'mod_confprogram'),
         ]);
 
         if ($canfavourite) {
-            $isfavourited = api::is_favourited((int) $USER->id, (int) $submission->id);
+            $isfavourited = isset($favouritedids[(int) $submission->id]);
             $starlabel = $isfavourited
                 ? get_string('unfavourite', 'mod_confprogram')
                 : get_string('favourite', 'mod_confprogram');
@@ -518,10 +544,10 @@ if ($confprogram->phase === 'review') {
         $isalldays = ($default === $alldayskey);
 
         $options = [$alldayskey => get_string('alldays', 'mod_confprogram')];
-        foreach ($daykeys as $key) {
-            $options[$key] = $key === 'unscheduled'
-                ? get_string('unscheduled', 'mod_confprogram')
-                : userdate(strtotime($key . ' 00:00:00'), get_string('strftimedate', 'langconfig'));
+        foreach ($groups as $key => $grouprows) {
+            // Same representative-timestamp labelling as the date bands below --
+            // see $daylabel's comment for the timezone reasoning.
+            $options[$key] = $daylabel($key, $grouprows);
         }
 
         echo html_writer::start_tag('form', [
@@ -572,7 +598,7 @@ if ($confprogram->phase === 'review') {
         $gridcontent = $renderheaderrow($headercells);
         if ($isalldays) {
             foreach ($daykeys as $key) {
-                $gridcontent .= $renderdateband($key);
+                $gridcontent .= $renderdateband($key, $groups[$key]);
                 foreach ($groups[$key] as $row) {
                     $gridcontent .= $renderitemrow($row);
                 }

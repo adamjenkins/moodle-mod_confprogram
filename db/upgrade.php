@@ -221,5 +221,24 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070601, 'confprogram');
     }
 
+    if ($oldversion < 2026070900) {
+        // Non-unique submissionid indexes on confprogram_favourite and
+        // confprogram_unvetted (FABLE.md review, 2026-07-09): is_favourited(),
+        // count_favourites() and is_unvetted() all filter by submissionid WITHOUT
+        // confprogram (documented cross-instance behaviour), so the existing
+        // unique keys' leading confprogram column cannot serve them and every
+        // call was a table scan -- count_favourites() is called per scheduled
+        // slot by mod_confscheduler's overbooking warning.
+        foreach (['confprogram_favourite', 'confprogram_unvetted'] as $tablename) {
+            $table = new xmldb_table($tablename);
+            $index = new xmldb_index('submissionid', XMLDB_INDEX_NOTUNIQUE, ['submissionid']);
+            if (!$dbman->index_exists($table, $index)) {
+                $dbman->add_index($table, $index);
+            }
+        }
+
+        upgrade_mod_savepoint(true, 2026070900, 'confprogram');
+    }
+
     return true;
 }

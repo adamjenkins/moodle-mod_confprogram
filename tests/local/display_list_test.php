@@ -205,16 +205,21 @@ final class display_list_test extends advanced_testcase {
 
     /**
      * default_day_key() picks the real day key nearest to now, never 'unscheduled',
-     * when at least one real day key exists.
+     * when at least one real day key exists. Groups carry their rows (as
+     * group_by_day()'s real output always does): since the 2026-07-09 timezone fix,
+     * nearest-to-now is computed from a group's own first row's schedule timestamp,
+     * not by re-parsing the (user-timezone) key with server-timezone strtotime().
      */
     public function test_default_day_key_picks_nearest_to_now(): void {
-        $today = userdate(time(), '%Y-%m-%d');
-        $farfuture = userdate(strtotime('+30 days'), '%Y-%m-%d');
+        $now = time();
+        $future = strtotime('+30 days');
+        $today = userdate($now, '%Y-%m-%d');
+        $farfuture = userdate($future, '%Y-%m-%d');
 
         $groups = [
-            $farfuture     => [],
-            $today         => [],
-            'unscheduled'  => [],
+            $farfuture     => [(object) ['schedule' => ['starttime' => $future]]],
+            $today         => [(object) ['schedule' => ['starttime' => $now]]],
+            'unscheduled'  => [(object) ['schedule' => null]],
         ];
 
         $this->assertSame($today, display_list::default_day_key($groups));

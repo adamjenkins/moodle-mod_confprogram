@@ -321,7 +321,10 @@ if ($canviewidentity) {
     foreach (submissions_api::get_speakers($submissionid) as $speaker) {
         if (!empty($speaker->userid)) {
             $user = \core_user::get_user($speaker->userid);
-            $speakerlines[] = $user ? fullname($user) : '-';
+            // s(): html_writer::tag() below does not escape its content, and
+            // fullname() is not guaranteed markup-free -- same fix as
+            // decisions.php/assign.php's own name labels.
+            $speakerlines[] = $user ? s(fullname($user)) : '-';
         } else if (!empty($speaker->name)) {
             $speakerlines[] = format_string($speaker->name);
         }

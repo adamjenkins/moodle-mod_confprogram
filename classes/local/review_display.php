@@ -44,7 +44,7 @@ class review_display {
      * @return string Trusted HTML -- do not pass through s()/format_string() again
      */
     public static function render(\context $context, array $reviews): string {
-        global $CFG;
+        global $CFG, $DB;
 
         if (!$reviews) {
             return \html_writer::tag(
@@ -75,27 +75,38 @@ class review_display {
             } else {
                 $reviewerlabel = get_string('anonymousreviewer', 'mod_confprogram', $i);
             }
-            $out .= \html_writer::tag('h5', $reviewerlabel);
+            // s(): html_writer::tag() does not escape its content, and a fullname()
+            // can carry markup on sites that import names through channels that skip
+            // PARAM_NOTAGS -- same fix decisions.php:281/assign.php already have.
+            $out .= \html_writer::tag('h5', s($reviewerlabel));
             $out .= \html_writer::tag('p', get_string('grade', 'mod_confprogram') . ': '
                 . ($review->grade !== null ? format_float($review->grade, 2) : '-'));
 
-            // Best-effort per-criterion breakdown for rubric-graded reviews. get_or_create_instance()
-            // here always finds the exact existing instance rather than creating a new one: we pass
-            // the instance's own id, raterid and itemid straight from the confprogram_review row, and
-            // fetch_instance() only returns an instance for an exact (id, raterid, itemid) match (see
-            // review.php's block comment on why itemid is the confprogram_review row id, not the
-            // submission id). If for any reason the grading area's active method has since changed
-            // away from rubric, or the instance record is gone, this quietly falls back to just the
-            // numeric grade already printed above.
+            // Best-effort per-criterion breakdown for rubric-graded reviews. The
+            // (id, raterid, itemid) triple is first checked with a side-effect-free
+            // record_exists(): get_or_create_instance() falls through to a real DB
+            // INSERT precisely when the triple does NOT match (grading method since
+            // changed, instance row gone), so calling it unguarded from this
+            // read-only rendering path accumulated one orphaned INCOMPLETE
+            // grading_instances row per page view of a stale review (FABLE.md
+            // review, 2026-07-09). On a mismatch this now quietly falls back to
+            // just the numeric grade already printed above, as always intended.
             $renderedcriteria = false;
             if ($gradingmethod === 'rubric' && $definition && !empty($definition->rubric_criteria) && $review->gradinginstanceid) {
-                $instance = $controller->get_or_create_instance(
-                    (int) $review->gradinginstanceid,
-                    (int) $review->reviewerid,
-                    (int) $review->id
-                );
-                $isexpectedinstance = $instance instanceof \gradingform_rubric_instance
-                    && (int) $instance->get_id() === (int) $review->gradinginstanceid;
+                $isexpectedinstance = $DB->record_exists('grading_instances', [
+                    'id'      => (int) $review->gradinginstanceid,
+                    'raterid' => (int) $review->reviewerid,
+                    'itemid'  => (int) $review->id,
+                ]);
+                if ($isexpectedinstance) {
+                    $instance = $controller->get_or_create_instance(
+                        (int) $review->gradinginstanceid,
+                        (int) $review->reviewerid,
+                        (int) $review->id
+                    );
+                    $isexpectedinstance = $instance instanceof \gradingform_rubric_instance
+                        && (int) $instance->get_id() === (int) $review->gradinginstanceid;
+                }
                 if ($isexpectedinstance) {
                     $filling = $instance->get_rubric_filling();
                     if (!empty($filling['criteria'])) {

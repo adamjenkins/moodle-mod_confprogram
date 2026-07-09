@@ -91,7 +91,7 @@ $unvettedids = array_map('intval', array_column(
 
 $validdecisions = ['accept', 'reject', 'resubmit', 'waitlist'];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (data_submitted()) {
     require_sesskey();
 
     if (optional_param('applybulkdecision', 0, PARAM_INT)) {
@@ -107,8 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (int) $USER->id
         );
 
+        // $decisionsreturnurl, not $pageurl: keeps the active track/status filters
+        // through the redirect, matching assign.php's behaviour.
         redirect(
-            $pageurl,
+            $decisionsreturnurl,
             get_string('bulkdecisionsaved', 'mod_confprogram', $count),
             null,
             \core\output\notification::NOTIFY_SUCCESS
@@ -126,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $round = rounds::get_current_round((int) $confprogram->id, $decidesubmissionid);
                 api::record_decision((int) $confprogram->id, $decidesubmissionid, $decision, $round, (int) $USER->id);
                 redirect(
-                    $pageurl,
+                    $decisionsreturnurl,
                     get_string('decisionsaved', 'mod_confprogram'),
                     null,
                     \core\output\notification::NOTIFY_SUCCESS
@@ -134,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-    redirect($pageurl);
+    redirect($decisionsreturnurl);
 }
 
 echo $OUTPUT->header();
@@ -290,7 +292,12 @@ foreach ($decorated as $row) {
         'decision_' . $submission->id,
         '',
         ['' => get_string('makedecision', 'mod_confprogram')],
-        ['class' => 'mr-2']
+        [
+            'class' => 'mr-2',
+            // Names WHICH submission this per-row select decides -- the bulk select
+            // at the top of the page already has an sr-only label (WCAG 4.1.2).
+            'aria-label' => get_string('makedecision', 'mod_confprogram') . ': ' . format_string($submission->title),
+        ]
     ) . html_writer::tag('button', get_string('savedecision', 'mod_confprogram'), [
         'type'  => 'submit',
         'name'  => 'decidesubmissionid',

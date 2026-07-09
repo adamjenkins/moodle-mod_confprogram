@@ -80,11 +80,17 @@ final class toggle_favourite_test extends advanced_testcase {
         $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $this->setUser($user);
 
-        $result = toggle_favourite::execute($cmid, $submissionid, true);
+        $result = \core_external\external_api::clean_returnvalue(
+            toggle_favourite::execute_returns(),
+            toggle_favourite::execute($cmid, $submissionid, true)
+        );
         $this->assertTrue($result['favourited']);
         $this->assertTrue(api::is_favourited((int) $user->id, $submissionid));
 
-        $result = toggle_favourite::execute($cmid, $submissionid, false);
+        $result = \core_external\external_api::clean_returnvalue(
+            toggle_favourite::execute_returns(),
+            toggle_favourite::execute($cmid, $submissionid, false)
+        );
         $this->assertFalse($result['favourited']);
         $this->assertFalse(api::is_favourited((int) $user->id, $submissionid));
     }

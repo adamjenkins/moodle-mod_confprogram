@@ -72,7 +72,7 @@ if ($confprogram->phase !== 'review') {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (data_submitted()) {
     require_sesskey();
 
     if ($markid = optional_param('markunvetted', 0, PARAM_INT)) {

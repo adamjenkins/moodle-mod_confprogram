@@ -83,7 +83,10 @@ final class get_submission_detail_test extends advanced_testcase {
         $viewer = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $this->setUser($viewer);
 
-        $result = get_submission_detail::execute($cmid, $submissionid);
+        $result = \core_external\external_api::clean_returnvalue(
+            get_submission_detail::execute_returns(),
+            get_submission_detail::execute($cmid, $submissionid)
+        );
         $this->assertSame('A Test Talk', $result['title']);
         $this->assertStringContainsString('An abstract', $result['html']);
     }
@@ -177,7 +180,10 @@ final class get_submission_detail_test extends advanced_testcase {
         $viewer = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $this->setUser($viewer);
 
-        $result = get_submission_detail::execute($cmid, $submissionid);
+        $result = \core_external\external_api::clean_returnvalue(
+            get_submission_detail::execute_returns(),
+            get_submission_detail::execute($cmid, $submissionid)
+        );
 
         $this->assertStringContainsString('mod_confprogram-track-pill', $result['html']);
         $this->assertStringContainsString('background-color:#3366cc', $result['html']);

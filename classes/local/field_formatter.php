@@ -35,6 +35,96 @@ use mod_confsubmissions\api as submissions_api;
  */
 class field_formatter {
     /**
+     * @var array<int, \stdClass>|null Track rows keyed by id, warmed by
+     * preload_for_submissions(); null until any preload has run this request.
+     */
+    private static ?array $trackcache = null;
+
+    /** @var array<int, array<int, string>> Optional-field values keyed by submissionid, warmed by preload. */
+    private static array $valuescache = [];
+
+    /** @var array<int, string[]> Ready-to-join speaker display names keyed by submissionid, warmed by preload. */
+    private static array $speakernamescache = [];
+
+    /**
+     * Warms request-scoped caches so the per-row accessors below (format_value(),
+     * get_track_pill_html()) answer from memory instead of issuing one query per
+     * row/field (FABLE.md review, 2026-07-09: the public Display-phase list paid
+     * one track query per row, one optional-field-values query per row PER
+     * configured field, and per-speaker user lookups -- 2,000+ queries on a
+     * 300-submission programme). Callers rendering a LIST should call this once
+     * with the full row set; single-submission callers (the detail modal) need
+     * not bother -- every accessor still falls back to its original query when
+     * the cache has no entry, with identical results either way.
+     *
+     * @param \stdClass[] $submissions The confsubmissions_submission records about to be rendered
+     * @return void
+     */
+    public static function preload_for_submissions(array $submissions): void {
+        global $DB;
+
+        $submissionids = array_map(static fn($submission): int => (int) $submission->id, $submissions);
+        if (!$submissionids) {
+            return;
+        }
+
+        self::$trackcache = self::$trackcache ?? [];
+        $trackids = array_diff(
+            array_filter(array_unique(array_map(
+                static fn($submission): int => (int) ($submission->trackid ?? 0),
+                $submissions
+            ))),
+            array_keys(self::$trackcache)
+        );
+        if ($trackids) {
+            self::$trackcache += $DB->get_records_list('confsubmissions_track', 'id', $trackids);
+        }
+
+        foreach (submissions_api::get_optional_field_values_for_submissions($submissionids) as $sid => $values) {
+            self::$valuescache[$sid] = $values;
+        }
+
+        $speakersbysubmission = submissions_api::get_speakers_for_submissions($submissionids);
+        $userids = [];
+        foreach ($speakersbysubmission as $speakers) {
+            foreach ($speakers as $speaker) {
+                if (!empty($speaker->userid)) {
+                    $userids[] = (int) $speaker->userid;
+                }
+            }
+        }
+        $namefields = implode(', ', array_merge(['id'], \core_user\fields::for_name()->get_required_fields()));
+        $users = $userids
+            ? $DB->get_records_list('user', 'id', array_unique($userids), '', $namefields)
+            : [];
+        foreach ($speakersbysubmission as $sid => $speakers) {
+            $names = [];
+            foreach ($speakers as $speaker) {
+                if (!empty($speaker->userid)) {
+                    if (isset($users[(int) $speaker->userid])) {
+                        $names[] = fullname($users[(int) $speaker->userid]);
+                    }
+                } else if (!empty($speaker->name)) {
+                    $names[] = format_string($speaker->name, true, ['escape' => false]);
+                }
+            }
+            self::$speakernamescache[$sid] = $names;
+        }
+    }
+
+    /**
+     * Clears the request-scoped caches. Only needed by unit tests, which run many
+     * "requests" in one PHP process.
+     *
+     * @return void
+     */
+    public static function reset_caches(): void {
+        self::$trackcache = null;
+        self::$valuescache = [];
+        self::$speakernamescache = [];
+    }
+
+    /**
      * Returns the display label for a field.
      *
      * @param string $fieldkey A field key as returned by field_settings::get_available_fields()
@@ -86,10 +176,13 @@ class field_formatter {
                 if (empty($submission->trackid)) {
                     return get_string('notrack', 'mod_confsubmissions');
                 }
-                $track = $DB->get_record('confsubmissions_track', ['id' => $submission->trackid]);
+                $track = self::fetch_track((int) $submission->trackid);
                 return $track ? format_string($track->name, true, $formatopts) : get_string('notrack', 'mod_confsubmissions');
 
             case 'speakers':
+                if (array_key_exists((int) $submission->id, self::$speakernamescache)) {
+                    return implode(', ', self::$speakernamescache[(int) $submission->id]);
+                }
                 $names = [];
                 foreach (submissions_api::get_speakers((int) $submission->id) as $speaker) {
                     if (!empty($speaker->userid)) {
@@ -108,9 +201,29 @@ class field_formatter {
                 if ($fieldid === null) {
                     return '';
                 }
+                if (array_key_exists((int) $submission->id, self::$valuescache)) {
+                    return (string) (self::$valuescache[(int) $submission->id][$fieldid] ?? '');
+                }
                 $values = submissions_api::get_optional_field_values((int) $submission->id);
                 return (string) ($values[$fieldid] ?? '');
         }
+    }
+
+    /**
+     * Fetches a track row through the preload cache when warm, falling back to a
+     * direct query otherwise (single-submission callers that never preload).
+     *
+     * @param int $trackid The confsubmissions_track id
+     * @return \stdClass|false The track record, or false if it no longer exists
+     */
+    private static function fetch_track(int $trackid) {
+        global $DB;
+
+        if (self::$trackcache !== null && array_key_exists($trackid, self::$trackcache)) {
+            return self::$trackcache[$trackid];
+        }
+
+        return $DB->get_record('confsubmissions_track', ['id' => $trackid]);
     }
 
     /**
@@ -134,13 +247,11 @@ class field_formatter {
      * @return string Trusted HTML -- do not pass through s()/format_string() again
      */
     public static function get_track_pill_html(\stdClass $submission): string {
-        global $DB;
-
         if (empty($submission->trackid)) {
             return get_string('notrack', 'mod_confsubmissions');
         }
 
-        $track = $DB->get_record('confsubmissions_track', ['id' => $submission->trackid]);
+        $track = self::fetch_track((int) $submission->trackid);
         if (!$track) {
             return get_string('notrack', 'mod_confsubmissions');
         }
