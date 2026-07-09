@@ -17,12 +17,13 @@
 /**
  * Notification template management screen for mod_confprogram.
  *
- * A single notification type (the accept/reject/waitlist decision notification),
- * so -- unlike mod_confsubmissions's equivalent page -- there are no tabs, just one
- * form. One row per instance (confprogram_notiftemplate, unique on
- * confprogram+notiftype). Pre-fills the editor with the built-in fallback content
- * when no row exists yet, same "always usable, never blank" convention as every
- * other template screen in this project.
+ * One template per decision type per instance (confprogram_notiftemplate, unique
+ * on confprogram+notiftype -- see db/install.xml). 2026-07-09: previously a
+ * single shared template for all decisions; now tab-routed one-per-decision-type,
+ * mirroring mod_confsubmissions's equivalent page. Visiting this page for a
+ * decision type that has no row yet pre-fills the editor with the built-in
+ * fallback content, so an organiser edits from a real starting point rather than
+ * a blank box.
  *
  * @package    mod_confprogram
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
@@ -37,6 +38,7 @@ use mod_confprogram\form\notiftemplate_form;
 use mod_confprogram\local\notifier;
 
 $id = required_param('id', PARAM_INT);
+$notiftype = optional_param('type', 'accept', PARAM_ALPHA);
 
 [$course, $cm] = get_course_and_cm_from_cmid($id, 'confprogram');
 $confprogram = $DB->get_record('confprogram', ['id' => $cm->instance], '*', MUST_EXIST);
@@ -46,7 +48,11 @@ require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/confprogram:managenotifications', $context);
 
-$pageurl = new moodle_url('/mod/confprogram/notifications.php', ['id' => $cm->id]);
+if (!in_array($notiftype, notifier::NOTIFIABLE_DECISIONS, true)) {
+    throw new \moodle_exception('error:invalidnotiftype', 'mod_confprogram');
+}
+
+$pageurl = new moodle_url('/mod/confprogram/notifications.php', ['id' => $cm->id, 'type' => $notiftype]);
 $PAGE->set_url($pageurl);
 $PAGE->set_title(format_string($confprogram->name) . ': ' . get_string('managenotifications', 'mod_confprogram'));
 $PAGE->set_heading(format_string($course->fullname));
@@ -54,13 +60,14 @@ $PAGE->set_context($context);
 
 $existing = $DB->get_record('confprogram_notiftemplate', [
     'confprogram' => $confprogram->id,
-    'notiftype'   => 'decision',
+    'notiftype'   => $notiftype,
 ]);
 
-$form = new notiftemplate_form($pageurl, ['context' => $context]);
+$form = new notiftemplate_form($pageurl, ['notiftype' => $notiftype, 'context' => $context]);
 
-$default = notifier::default_template();
+$default = notifier::default_template($notiftype);
 $form->set_data((object) [
+    'notiftype'            => $notiftype,
     'notificationsenabled' => (bool) $confprogram->notificationsenabled,
     'subject'              => $existing->subject ?? $default['subject'],
     'body'                 => [
@@ -82,7 +89,7 @@ if ($form->is_cancelled()) {
 
     $record = (object) [
         'confprogram'  => $confprogram->id,
-        'notiftype'    => 'decision',
+        'notiftype'    => $notiftype,
         'subject'      => $data->subject,
         'body'         => $data->body['text'],
         'bodyformat'   => $data->body['format'],
@@ -99,14 +106,15 @@ if ($form->is_cancelled()) {
 
     // Re-enabling the master switch must actually deliver any decision that was
     // recorded (and correctly skipped) while it was off -- flipping the checkbox
-    // alone does not call send_pending_decision_notifications(); only view.php's
-    // Review-to-Display phase-toggle handler otherwise does, which never runs
-    // again once an instance is already in Display phase. Only meaningful once
-    // decisions are actually revealed (Display phase); in Review phase nothing is
-    // ever pending regardless of the switch, since notify_decision() is never
-    // called until phase is Display.
+    // alone does not call send_pending_decision_notifications(); that is otherwise
+    // only manually triggered from the "Send pending notifications" button on
+    // view.php. Only meaningful once decisions are actually revealed (Display
+    // phase); in Review phase nothing accept/reject/waitlist-shaped is ever
+    // pending regardless of the switch, since notify_decision() is never called
+    // for those until phase is Display (resubmit sends immediately regardless of
+    // phase, so it never accumulates here either way).
     if (!empty($data->notificationsenabled) && $confprogram->phase === 'display') {
-        \mod_confprogram\api::send_pending_decision_notifications((int) $confprogram->id);
+        api::send_pending_decision_notifications((int) $confprogram->id);
     }
 
     redirect($pageurl, get_string('notiftemplatesaved', 'mod_confprogram'), null, \core\output\notification::NOTIFY_SUCCESS);
@@ -116,10 +124,31 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($confprogram->name), 2);
 echo $OUTPUT->heading(get_string('managenotifications', 'mod_confprogram'), 3);
 
-$placeholderlist = implode(', ', array_map(
-    static fn (string $name): string => "[[{$name}]]",
-    ['fullname', 'submissiontitle', 'coursename', 'decision']
+$tablinks = [];
+foreach (notifier::NOTIFIABLE_DECISIONS as $type) {
+    $label = get_string('decision_' . $type, 'mod_confprogram');
+    if ($type === $notiftype) {
+        $tablinks[] = html_writer::tag('strong', $label);
+    } else {
+        $tablinks[] = html_writer::link(
+            new moodle_url('/mod/confprogram/notifications.php', ['id' => $cm->id, 'type' => $type]),
+            $label
+        );
+    }
+}
+echo html_writer::tag('p', implode(' | ', $tablinks));
+
+$pendingcount = api::count_pending_notifications((int) $confprogram->id);
+echo html_writer::tag('p', html_writer::link(
+    new moodle_url('/mod/confprogram/pending_notifications.php', ['id' => $cm->id]),
+    get_string('pendingnotifications', 'mod_confprogram', $pendingcount)
 ));
+
+$placeholdernames = ['fullname', 'submissiontitle', 'coursename', 'decision'];
+if ($notiftype === 'resubmit') {
+    $placeholdernames[] = 'feedbackurl';
+}
+$placeholderlist = implode(', ', array_map(static fn (string $name): string => "[[{$name}]]", $placeholdernames));
 echo $OUTPUT->notification(
     get_string('notifplaceholders', 'mod_confprogram', $placeholderlist),
     'info'

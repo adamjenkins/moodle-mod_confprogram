@@ -82,7 +82,7 @@ class backup_confprogram_activity_structure_step extends backup_activity_structu
 
         $decisions = new backup_nested_element('decisions');
         $decision = new backup_nested_element('decision', ['id'], [
-            'submissionid', 'decision', 'round', 'decidedby', 'notifiedtime', 'timecreated',
+            'submissionid', 'decision', 'round', 'decidedby', 'notifiedtime', 'superseded', 'timecreated',
         ]);
 
         $favourites = new backup_nested_element('favourites');

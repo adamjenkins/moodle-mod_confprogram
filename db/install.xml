@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confprogram/db" VERSION="2026070900" COMMENT="XMLDB file for Moodle mod/confprogram"
+<XMLDB PATH="mod/confprogram/db" VERSION="2026070903" COMMENT="XMLDB file for Moodle mod/confprogram"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -15,7 +15,7 @@
         <FIELD NAME="blindreview" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether submitter/reviewer identities are hidden from each other during review"/>
         <FIELD NAME="groupreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether reviewers are assigned as members of reviewer groups rather than individually"/>
         <FIELD NAME="defaultmaxreviews" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Default per-reviewer cap on assigned reviews in group-review mode; 0 means unlimited"/>
-        <FIELD NAME="notificationsenabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Master switch (user request, 2026-07-06): when 0, this instance's notifier never sends the decision notification, regardless of the template configured. Defaults to 1 (enabled) so existing instances keep their current behaviour"/>
+        <FIELD NAME="notificationsenabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Master switch (user request, 2026-07-06): when 0, this instance's notifier never sends the decision notification, regardless of the template configured. Defaults to 0 (disabled) as of 2026-07-09 -- an organiser must explicitly opt in per instance; this default only applies to newly-created instances, existing instances' stored values are untouched by the upgrade step that changed it"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>
@@ -84,7 +84,8 @@
         <FIELD NAME="decision" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="accept, reject, resubmit or waitlist"/>
         <FIELD NAME="round" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="1" COMMENT="Increments each time a resubmit cycle completes"/>
         <FIELD NAME="decidedby" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to user table; the user who made this decision"/>
-        <FIELD NAME="notifiedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the accept/reject/waitlist notification was sent to this submission's speakers, or 0 if not yet sent. A decision recorded during Review phase is deliberately left at 0 (not sent) until the instance switches to Display phase -- the same Display-phase embargo as the confsubmissions status sync above -- see api::record_decision()/send_pending_decision_notifications(). Resubmit decisions never send a notification at all and so are also left at 0 permanently"/>
+        <FIELD NAME="notifiedtime" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Timestamp the decision notification was sent to this submission's speakers, or 0 if not yet sent. An accept/reject/waitlist decision recorded during Review phase is deliberately left at 0 (not sent) until the instance switches to Display phase -- the same Display-phase embargo as the confsubmissions status sync above; a resubmit decision instead sends immediately regardless of phase, since it is time-sensitive (see feedback.php's own Review-phase-only access) -- see api::record_decision()/send_pending_decision_notifications()"/>
+        <FIELD NAME="superseded" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="1 if a newer decision was later recorded for the same submission (auto-superseded by api::record_decision(), whether or not this row had already been notified), or an organiser explicitly dismissed it via pending_notifications.php. A superseded row is permanently excluded from sending -- readers must check superseded, not notifiedtime alone, to determine 'is this eligible to send'. Does not affect decision_report.php's own reporting, which reads full history unfiltered by this column (2026-07-09 dedup fix: at most one pending notification per submission, always the newest)"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>
       </FIELDS>
       <KEYS>
@@ -150,8 +151,8 @@
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="confprogram" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Foreign key to confprogram table"/>
-        <FIELD NAME="notiftype" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="Always 'decision' currently (a single notification type, unlike mod_confsubmissions's two) -- kept as its own column rather than a hardcoded single row per instance so a second notification type can be added later without a schema change"/>
-        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email subject, with embeddable placeholder fields (e.g. [[fullname]], [[submissiontitle]], [[decision]]); null/blank falls back to a built-in default"/>
+        <FIELD NAME="notiftype" TYPE="char" LENGTH="20" NOTNULL="true" SEQUENCE="false" COMMENT="One of 'accept', 'reject', 'waitlist', 'resubmit' (2026-07-09: split from a single shared 'decision' template into one per decision type) -- this column and the unique index below already supported multiple rows per instance with no schema change needed"/>
+        <FIELD NAME="subject" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email subject, with embeddable placeholder fields (e.g. [[fullname]], [[submissiontitle]], [[decision]], and [[feedbackurl]] for the resubmit type only); null/blank falls back to a built-in default"/>
         <FIELD NAME="body" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Notification email body, same placeholder syntax as subject; null/blank falls back to a built-in default"/>
         <FIELD NAME="bodyformat" TYPE="int" LENGTH="4" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Standard Moodle text-format field for the body column, same convention as this plugin's own introformat field"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0"/>

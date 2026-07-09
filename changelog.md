@@ -2,6 +2,50 @@
 
 ## Unreleased
 
+- Notifications overhaul + modal fix (2026-07-09, user-requested):
+  - **`notificationsenabled` now defaults to off** for newly created
+    instances (existing instances are untouched by the upgrade step).
+  - **Per-decision notification templates.** `confprogram_notiftemplate` was
+    already schema-ready for more than one row per instance; `notifier.php`
+    now looks up a template per decision type (`accept`/`reject`/
+    `waitlist`/`resubmit`) instead of one shared `decision` template, and
+    `notifications.php`/`notiftemplate_form.php` are tab-routed per type
+    (mirroring `mod_confsubmissions`'s existing pattern). Each type ships
+    its own default subject/body describing what happens next (accept:
+    claim a presenter ticket promptly; reject: polite closure; waitlist:
+    check back later; resubmit: a `[[feedbackurl]]` link to `feedback.php`).
+  - **Resubmit is now a notifiable decision and sends immediately**, not
+    deferred to Display phase — `feedback.php` (where the link in the
+    resubmit email sends the submitter) only works during Review phase, so
+    deferring would ship a dead link. Because this is a real, immediate
+    send, both the per-row "Save decision" button and the bulk-apply
+    toolbar now show a confirmation dialog (naming the immediate email)
+    before recording a resubmit decision, with a chance to cancel.
+  - **Phase-change no longer auto-sends notifications.** Switching to
+    Display phase used to trigger `send_pending_decision_notifications()`
+    automatically; that call is removed from `view.php`'s phase-toggle
+    handler. A new **Send pending notifications** button (with a live
+    pending count) on the organiser `view.php` page triggers it manually
+    instead, via a new `mod_confprogram_send_pending_notifications` AJAX
+    external function.
+  - **New "Pending notifications" page** (`pending_notifications.php`,
+    `mod/confprogram:managenotifications`) lists every queued-but-unsent
+    decision with a per-row **Dismiss**, which marks it `superseded` (never
+    sent, decision record itself untouched) without needing to wait for a
+    send.
+  - **Fixed: more than one unsent decision could queue per submission.**
+    E.g. waitlist then later accept on the same submission would previously
+    send both emails. `confprogram_decision` gained a `superseded` column,
+    set at write time in `api::record_decision()` whenever a newer decision
+    is recorded for the same submission — `send_pending_decision_notifications()`,
+    `count_pending_notifications()`, and the new pending page all share one
+    `get_pending_decisions()` query (`notifiedtime = 0 AND superseded = 0`).
+    Upgrade step `2026070902` backfills existing installs, marking every
+    row but the newest unsent one per submission as superseded.
+  - **Presentation-detail modal no longer truncates a long title.** Core's
+    `modal.mustache` hard-codes `.text-truncate` on the title; the modal is
+    now created with a scoped `templateContext.classes`, with a matching
+    CSS override in `styles.css` so the title wraps instead of ellipsizing.
 - Review fixes (2026-07-09, from the four-plugin FABLE.md review — see the
   coordination repo):
   - **Critical: `displaysettings.php` could never save** — its form posted to a

@@ -91,13 +91,15 @@ if (data_submitted() && optional_param('togglephase', 0, PARAM_BOOL)) {
     // toggling BACK to Review: once a status has been revealed to a submitter, this
     // project treats that as a one-way reveal, not a fully symmetric embargo -- see
     // sync_submission_statuses_to_confsubmissions()'s own docblock for the reasoning.
+    //
+    // 2026-07-09: this used to also call send_pending_decision_notifications() here,
+    // auto-sending every deferred decision notification the moment phase switched.
+    // That automatic send was removed in favour of the explicit "Send pending
+    // notifications" button below (mirroring mod_confscheduler's own manually
+    // triggered send) -- the status sync above is unrelated and still happens
+    // automatically, only the notification send is now a separate organiser action.
     if ($newphase === 'display') {
         api::sync_submission_statuses_to_confsubmissions((int) $confprogram->id);
-
-        // Same one-way-reveal timing as the status sync just above (user
-        // confirmed, 2026-07-05): every decision notification deferred while this
-        // instance was still in Review phase is sent now, in one batch.
-        api::send_pending_decision_notifications((int) $confprogram->id);
     }
 
     // redirect() disables the clean Location-header redirect and instead renders
@@ -121,6 +123,7 @@ echo $OUTPUT->heading(format_string($confprogram->name), 2);
 
 if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers', $context)) {
     $nextphase = $confprogram->phase === 'review' ? 'display' : 'review';
+    $pendingnotifications = api::count_pending_notifications((int) $confprogram->id);
 
     echo html_writer::start_tag('div', ['class' => 'confprogram-editcontrols mb-3']);
 
@@ -161,6 +164,25 @@ if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers'
             get_string('managenotifications', 'mod_confprogram'),
             ['class' => 'btn btn-outline-secondary btn-sm mr-2']
         );
+
+        echo html_writer::link(
+            new moodle_url('/mod/confprogram/pending_notifications.php', ['id' => $cm->id]),
+            get_string('pendingnotifications', 'mod_confprogram', $pendingnotifications),
+            ['class' => 'btn btn-outline-secondary btn-sm mr-2']
+        );
+
+        // Manual "Send pending notifications" button (2026-07-09, replacing the
+        // automatic phase-toggle send above) -- mirrors mod_confscheduler's own
+        // send button: confirm dialog naming the pending count, AJAX call, alert
+        // summary, then reload so the count/list reflect the send.
+        echo html_writer::tag('button', get_string('sendpendingnotifications', 'mod_confprogram', $pendingnotifications), [
+            'type'          => 'button',
+            'class'         => 'btn btn-outline-secondary btn-sm mr-2 mod_confprogram-send-notifications',
+            'disabled'      => $pendingnotifications === 0 ? 'disabled' : null,
+            'data-cmid'     => $cm->id,
+            'data-pending'  => $pendingnotifications,
+        ]);
+        $PAGE->requires->js_call_amd('mod_confprogram/notifications_button', 'init');
     }
 
     // Persistent entry point to define/edit the review rubric at any time. Previously the

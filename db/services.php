@@ -41,4 +41,12 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/confprogram:favourite',
     ],
+    'mod_confprogram_send_pending_notifications' => [
+        'classname'   => 'mod_confprogram\external\send_pending_notifications',
+        'description' => 'Sends every pending decision notification for a confprogram instance, '
+            . 'for the "Send pending notifications" button on view.php.',
+        'type'        => 'write',
+        'ajax'        => true,
+        'capabilities' => 'mod/confprogram:managenotifications',
+    ],
 ];

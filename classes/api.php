@@ -531,6 +531,28 @@ class api {
             'timecreated'  => time(),
         ]);
 
+        // Dedup fix (user request, 2026-07-09): at most one pending (unsent)
+        // notification per submission, always the newest -- any older not-yet-sent
+        // decision row for this same submission is now superseded and will never
+        // send. This does not touch decision_report.php's own reporting, which reads
+        // full history unfiltered by this column.
+        self::supersede_earlier_pending_decisions($confprogramid, $submissionid, $id);
+
+        if ($decision === 'resubmit') {
+            // Resubmit sends IMMEDIATELY, regardless of phase (2026-07-09 revision):
+            // unlike accept/reject/waitlist, resubmit's own feedbackurl only works
+            // during Review phase (see feedback.php), and the review round has
+            // already moved on the moment this is recorded (see rounds.php) -- so
+            // deferring to Display phase like the other three decisions would make
+            // the notification's own link dead on arrival. Only marked notified if a
+            // send was actually attempted (i.e. notificationsenabled is on).
+            if (\mod_confprogram\local\notifier::notify_decision($confprogramid, $submissionid, $decision)) {
+                $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $id]);
+            }
+
+            return $id;
+        }
+
         // Keep mod_confsubmissions's own confsubmissions_submission.status in sync
         // with Accept/Reject decisions -- but ONLY if this confprogram instance is
         // already in Display phase right now. A submitter's own "my submissions" view
@@ -549,24 +571,51 @@ class api {
             self::sync_one_submission_status_to_confsubmissions($decision, $submissionid);
 
             // Same Display-phase embargo as the status sync just above (user
-            // confirmed, 2026-07-05): a decision notification is never sent while
-            // still in Review phase. Decisions made during Review phase are notified
-            // later, in one batch, by send_pending_decision_notifications() when the
-            // organiser switches to Display -- see view.php's phase-toggle handler.
-            // Resubmit decisions are never notified at all (see notifier's docblock).
-            if (in_array($decision, \mod_confprogram\local\notifier::NOTIFIABLE_DECISIONS, true)) {
-                // Only marked notified if a send was actually attempted (i.e. the
-                // instance's notificationsenabled master switch is on) -- leaving
-                // notifiedtime at 0 while disabled means a later re-enable still
-                // delivers this decision via send_pending_decision_notifications()
-                // rather than silently losing it (user request, 2026-07-06).
-                if (\mod_confprogram\local\notifier::notify_decision($confprogramid, $submissionid, $decision)) {
-                    $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $id]);
-                }
+            // confirmed, 2026-07-05): an accept/reject/waitlist notification is never
+            // sent while still in Review phase. Decisions made during Review phase
+            // are notified later, in one batch, by
+            // send_pending_decision_notifications() when the organiser switches to
+            // Display -- see view.php's phase-toggle handler (2026-07-09: that call
+            // was removed in favour of an explicit "Send pending notifications"
+            // button, mirroring mod_confscheduler).
+            //
+            // Only marked notified if a send was actually attempted (i.e. the
+            // instance's notificationsenabled master switch is on) -- leaving
+            // notifiedtime at 0 while disabled means a later re-enable still
+            // delivers this decision via send_pending_decision_notifications()
+            // rather than silently losing it (user request, 2026-07-06).
+            if (\mod_confprogram\local\notifier::notify_decision($confprogramid, $submissionid, $decision)) {
+                $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $id]);
             }
         }
 
         return $id;
+    }
+
+    /**
+     * Marks every other not-yet-sent decision row for this same submission as
+     * superseded, so it is permanently excluded from sending -- called by
+     * record_decision() the moment a new decision is inserted, so "at most one
+     * pending notification per submission, always the newest" holds by
+     * construction rather than needing a read-time MAX() query repeated across
+     * send_pending_decision_notifications(), count_pending_notifications(), and
+     * pending_notifications.php.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $submissionid The mod_confsubmissions confsubmissions_submission id
+     * @param int $keepid The confprogram_decision id just inserted -- never superseded by this call
+     * @return void
+     */
+    private static function supersede_earlier_pending_decisions(int $confprogramid, int $submissionid, int $keepid): void {
+        global $DB;
+
+        $DB->set_field_select(
+            'confprogram_decision',
+            'superseded',
+            1,
+            'confprogram = ? AND submissionid = ? AND notifiedtime = 0 AND superseded = 0 AND id <> ?',
+            [$confprogramid, $submissionid, $keepid]
+        );
     }
 
     /**
@@ -652,42 +701,97 @@ class api {
     }
 
     /**
-     * Sends the deferred decision notification for every not-yet-notified
-     * accept/reject/waitlist decision on this confprogram instance -- called only
-     * when switching Review -> Display (see view.php's phase-toggle handler),
-     * alongside sync_submission_statuses_to_confsubmissions() above.
+     * Every pending (not-yet-sent, not superseded/dismissed) decision notification
+     * on this confprogram instance. Because record_decision() supersedes any older
+     * unsent row for the same submission at write-time (see
+     * supersede_earlier_pending_decisions()), this already returns at most one row
+     * per submission -- the newest. Shared by send_pending_decision_notifications(),
+     * count_pending_notifications(), and pending_notifications.php so all three
+     * agree on what counts as pending.
      *
-     * Unlike that method (which only cares about a submission's CURRENT/latest
-     * decision), this notifies for EVERY individual not-yet-notified decision row:
-     * a submission waitlisted then later accepted should tell its speakers about
-     * both events, not just the final one -- each is a genuine status change worth
-     * knowing about.
+     * In practice a resubmit decision is never found here: it sends immediately in
+     * record_decision() rather than being deferred, so it only ever appears
+     * pending if that immediate send itself failed (e.g. notificationsenabled was
+     * off at the time) -- the same "leave notifiedtime at 0 rather than lose it"
+     * safety net accept/reject/waitlist already rely on.
      *
      * @param int $confprogramid The confprogram instance id
-     * @return void
+     * @return \stdClass[] confprogram_decision records, keyed by id
      */
-    public static function send_pending_decision_notifications(int $confprogramid): void {
+    public static function get_pending_decisions(int $confprogramid): array {
         global $DB;
 
-        [$insql, $params] = $DB->get_in_or_equal(\mod_confprogram\local\notifier::NOTIFIABLE_DECISIONS);
-        $params = array_merge([$confprogramid], $params);
-
-        $pending = $DB->get_records_select(
+        return $DB->get_records_select(
             'confprogram_decision',
-            "confprogram = ? AND notifiedtime = 0 AND decision $insql",
-            $params
+            'confprogram = ? AND notifiedtime = 0 AND superseded = 0',
+            [$confprogramid]
         );
+    }
 
-        foreach ($pending as $decision) {
-            $sent = \mod_confprogram\local\notifier::notify_decision(
+    /**
+     * The number of pending decision notifications for this instance -- feeds the
+     * live count on view.php's "Send pending notifications" button and the
+     * pending-notifications page.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @return int
+     */
+    public static function count_pending_notifications(int $confprogramid): int {
+        return count(self::get_pending_decisions($confprogramid));
+    }
+
+    /**
+     * Sends the deferred decision notification for every pending decision on this
+     * confprogram instance -- manually triggered via the "Send pending
+     * notifications" button on view.php (2026-07-09: previously auto-sent on the
+     * Review -> Display phase toggle; that call was removed in favour of this
+     * explicit action, mirroring mod_confscheduler's own send button).
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @return int The number of decisions a send was attempted for (i.e. the
+     *         instance's notificationsenabled master switch was on) -- matches
+     *         mod_confscheduler\api::send_pending_notifications()'s return shape
+     */
+    public static function send_pending_decision_notifications(int $confprogramid): int {
+        global $DB;
+
+        $sent = 0;
+        foreach (self::get_pending_decisions($confprogramid) as $decision) {
+            if (\mod_confprogram\local\notifier::notify_decision(
                 $confprogramid,
                 (int) $decision->submissionid,
                 $decision->decision
-            );
-            if ($sent) {
+            )) {
                 $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $decision->id]);
+                $sent++;
             }
         }
+
+        return $sent;
+    }
+
+    /**
+     * Dismisses one pending decision notification: marks it superseded so it is
+     * permanently excluded from sending and drops out of get_pending_decisions()/
+     * count_pending_notifications(), without touching the decision row's own
+     * decision/round/decidedby/timecreated fields or decision_report.php's
+     * unfiltered history reads. A no-op if the row doesn't belong to this
+     * instance or is no longer pending (already sent, already superseded).
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $decisionid The confprogram_decision id to dismiss
+     * @return void
+     */
+    public static function dismiss_pending_decision(int $confprogramid, int $decisionid): void {
+        global $DB;
+
+        $DB->set_field_select(
+            'confprogram_decision',
+            'superseded',
+            1,
+            'id = ? AND confprogram = ? AND notifiedtime = 0 AND superseded = 0',
+            [$decisionid, $confprogramid]
+        );
     }
 
     /**

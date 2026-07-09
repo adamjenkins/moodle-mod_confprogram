@@ -93,6 +93,12 @@ const openDetail = (link) => {
         body: result.html,
         show: true,
         removeOnClose: true,
+        // Core's own modal.mustache hard-codes a Bootstrap text-truncate class on
+        // the title, ellipsizing a long presentation title instead of wrapping it
+        // (user report, 2026-07-09). Core cannot be patched, so this scopes an
+        // override via the template's own overridable {{classes}} block -- see
+        // the matching CSS rule in styles.css.
+        templateContext: {classes: 'mod_confprogram-submission-modal'},
     })).catch(Notification.exception);
 };
 

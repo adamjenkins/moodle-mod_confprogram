@@ -21,12 +21,12 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/formslib.php');
 
 /**
- * Notification template editor form used on notifications.php -- there is only one
- * notification type in this plugin (the decision notification), unlike
- * mod_confsubmissions's two, so unlike that plugin's equivalent form there is no
- * hidden 'notiftype' field to route between tabs.
+ * Notification template editor form used on notifications.php, one instance per
+ * decision type (2026-07-09: previously a single shared template for all
+ * decisions) -- mirrors mod_confsubmissions's own two-tab equivalent form.
  *
  * Required custom data:
+ * - notiftype: string, one of \mod_confprogram\local\notifier::NOTIFIABLE_DECISIONS
  * - context: \context_module, this instance's own context (required by the
  *   'editor' element even though maxfiles is 0 here)
  *
@@ -40,10 +40,20 @@ class notiftemplate_form extends \moodleform {
      */
     public function definition() {
         $mform = $this->_form;
+        $notiftype = $this->_customdata['notiftype'];
         $context = $this->_customdata['context'];
 
-        // Instance-level master switch (user request, 2026-07-06), saved to the
-        // confprogram table itself -- see notifications.php.
+        // Named 'notiftype', not 'type': notifications.php treats the querystring
+        // 'type' param as which decision's tab is being edited, matching
+        // mod_confsubmissions's own "POST field name must not collide with a GET
+        // routing param" convention.
+        $mform->addElement('hidden', 'notiftype', $notiftype);
+        $mform->setType('notiftype', PARAM_ALPHA);
+
+        // Instance-level master switch (user request, 2026-07-06): saved to the
+        // confprogram table itself, not the per-type notiftemplate row, so it
+        // applies regardless of which decision type's tab this form was submitted
+        // from -- see notifications.php.
         $mform->addElement('advcheckbox', 'notificationsenabled', get_string('notificationsenabled', 'mod_confprogram'));
         $mform->addHelpButton('notificationsenabled', 'notificationsenabled', 'mod_confprogram');
 

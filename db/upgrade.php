@@ -240,5 +240,80 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070900, 'confprogram');
     }
 
+    if ($oldversion < 2026070901) {
+        // Notifications master switch default flipped 1 -> 0 (user request,
+        // 2026-07-09): new instances now default to notifications OFF. Existing
+        // instances' stored notificationsenabled values are deliberately left
+        // untouched -- only the column's default (used by the next INSERT with
+        // no explicit value) changes.
+        $table = new xmldb_table('confprogram');
+        $field = new xmldb_field(
+            'notificationsenabled',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'defaultmaxreviews'
+        );
+        if ($dbman->field_exists($table, $field)) {
+            $dbman->change_field_default($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026070901, 'confprogram');
+    }
+
+    if ($oldversion < 2026070902) {
+        // Per-decision notification dedup fix (user request, 2026-07-09): at
+        // most one pending (unsent) decision notification per submission,
+        // always the newest -- see api::record_decision()/get_pending_decisions().
+        $table = new xmldb_table('confprogram_decision');
+        $field = new xmldb_field('superseded', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'notifiedtime');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // One-time backfill: a site upgrading from before this fix may already
+        // have more than one unsent decision row for the same submission (e.g.
+        // an unsent waitlist row followed by a later unsent accept row). Mark
+        // every such row superseded except the most-recently-inserted one per
+        // (confprogram, submissionid) -- record_decision() keeps this invariant
+        // up to date on every future insert itself.
+        $rs = $DB->get_recordset_sql(
+            "SELECT confprogram, submissionid, MAX(id) AS keepid
+               FROM {confprogram_decision}
+              WHERE notifiedtime = 0
+           GROUP BY confprogram, submissionid
+             HAVING COUNT(*) > 1"
+        );
+        foreach ($rs as $group) {
+            $DB->execute(
+                "UPDATE {confprogram_decision}
+                    SET superseded = 1
+                  WHERE confprogram = :confprogram AND submissionid = :submissionid
+                    AND notifiedtime = 0 AND id <> :keepid",
+                [
+                    'confprogram'   => $group->confprogram,
+                    'submissionid'  => $group->submissionid,
+                    'keepid'        => $group->keepid,
+                ]
+            );
+        }
+        $rs->close();
+
+        upgrade_mod_savepoint(true, 2026070902, 'confprogram');
+    }
+
+    if ($oldversion < 2026070903) {
+        // No schema change here: this savepoint exists purely to make sure the upgrade
+        // pipeline runs, which is what registers the new
+        // mod_confprogram_send_pending_notifications external function declared in
+        // db/services.php (manual "Send pending notifications" button, 2026-07-09,
+        // replacing the automatic phase-toggle send) -- same pattern as
+        // mod_confscheduler's 2026070802 for its own send_pending_notifications.
+        upgrade_mod_savepoint(true, 2026070903, 'confprogram');
+    }
+
     return true;
 }

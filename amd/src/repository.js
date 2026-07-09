@@ -1,4 +1,3 @@
-<?php
 // This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
@@ -14,21 +13,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+import Ajax from 'core/ajax';
+
 /**
- * Plugin version metadata for mod_confprogram.
+ * Thin wrapper around this plugin's send_pending_notifications AJAX external
+ * function, used by amd/src/notifications_button.js -- mirrors
+ * mod_confscheduler/repository.js's equivalent wrapper.
  *
- * @package    mod_confprogram
+ * @module     mod_confprogram/repository
  * @copyright  2026 Adam Jenkins <adam@wisecat.net>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
-$plugin->component = 'mod_confprogram';
-$plugin->version   = 2026070903; // The current module version (Date: YYYYMMDDXX).
-$plugin->requires  = 2026042000; // Moodle 5.2.
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.0';
-$plugin->dependencies = [
-    'mod_confsubmissions' => ANY_VERSION,
-];
+/**
+ * Sends every pending decision notification for a confprogram instance.
+ *
+ * @param {Number} cmid The confprogram course-module id
+ * @return {Promise} Resolves to {sent: Number}
+ */
+export const sendPendingNotifications = (cmid) => Ajax.call([{
+    methodname: 'mod_confprogram_send_pending_notifications',
+    args: {cmid},
+}])[0];

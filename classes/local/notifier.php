@@ -19,23 +19,28 @@ namespace mod_confprogram\local;
 use mod_confsubmissions\api as submissions_api;
 
 /**
- * Sends this plugin's decision notification (user request, 2026-07-05: "on the
- * submission being accepted, rejected, or waitlisted") via Moodle's own core
- * notification system, with an organiser-editable template
- * (notifications.php, confprogram_notiftemplate) -- same conventions as
- * mod_confsubmissions\local\notifier (built-in default fallback, a plain fixed
- * `[[name]]` placeholder delimiter).
+ * Sends this plugin's decision notification via Moodle's own core notification
+ * system, with a separate organiser-editable template per decision type
+ * (notifications.php, confprogram_notiftemplate, notiftype = 'accept'|'reject'|
+ * 'waitlist'|'resubmit') -- same conventions as mod_confsubmissions\local\notifier
+ * (built-in default fallback per type, a plain fixed `[[name]]` placeholder
+ * delimiter).
  *
- * Deliberately excludes 'resubmit' decisions: the user's own request named only
- * "accepted, rejected, or waitlisted", and resubmit is a distinct workflow (the
- * submitter is expected to revise and resubmit, not simply be informed of a final
- * status) that was not asked for here.
+ * Timing differs by decision type (2026-07-09 revision):
+ * - accept/reject/waitlist notifications are deferred until this confprogram
+ *   instance reaches Display phase, the same embargo
+ *   \mod_confprogram\api::record_decision() already applies to syncing
+ *   confsubmissions_submission.status -- see that method's own docblock.
+ * - resubmit notifications send IMMEDIATELY when the decision is recorded,
+ *   regardless of phase: feedback.php (where the submitter reads reviewer
+ *   feedback and resubmits) only works during Review phase, so deferring a
+ *   resubmit notification to Display phase would make its own [[feedbackurl]]
+ *   link dead on arrival, and the review round has already moved on by then
+ *   (see classes/local/rounds.php). Because this is a real, immediate,
+ *   user-visible side effect, decisions.php/decisions.js gate recording a
+ *   resubmit decision behind its own confirm dialog before submitting.
  *
- * Timing is user-confirmed (2026-07-05 clarification): a decision notification is
- * deferred until this confprogram instance reaches Display phase, the same embargo
- * \mod_confprogram\api::record_decision() already applies to syncing
- * confsubmissions_submission.status -- see that method's own docblock. This class
- * itself does not check phase; api::record_decision() and
+ * This class itself does not check phase; api::record_decision() and
  * api::send_pending_decision_notifications() are the two call sites responsible
  * for only ever calling notify_decision() when a decision is actually eligible to
  * be revealed.
@@ -45,38 +50,40 @@ use mod_confsubmissions\api as submissions_api;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class notifier {
-    /** @var string[] Decision values that generate a notification (resubmit excluded, see class docblock). */
-    public const NOTIFIABLE_DECISIONS = ['accept', 'reject', 'waitlist'];
+    /** @var string[] Decision values that generate a notification -- now all four possible decisions. */
+    public const NOTIFIABLE_DECISIONS = ['accept', 'reject', 'waitlist', 'resubmit'];
 
     /**
-     * The built-in fallback subject/body for the (single) 'decision' notification
-     * type, used until an organiser configures their own via notifications.php.
+     * The built-in fallback subject/body for one decision type's notification,
+     * used until an organiser configures their own via notifications.php.
      *
+     * @param string $decision One of self::NOTIFIABLE_DECISIONS
      * @return array{subject: string, body: string}
      */
-    public static function default_template(): array {
+    public static function default_template(string $decision): array {
         return [
-            'subject' => get_string('notifdefaultsubject:decision', 'mod_confprogram'),
-            'body'    => get_string('notifdefaultbody:decision', 'mod_confprogram'),
+            'subject' => get_string("notifdefaultsubject:{$decision}", 'mod_confprogram'),
+            'body'    => get_string("notifdefaultbody:{$decision}", 'mod_confprogram'),
         ];
     }
 
     /**
-     * The configured subject/body for this confprogram instance's decision
-     * notification, or default_template()'s fallback if unset/blank.
+     * The configured subject/body for this confprogram instance's notification
+     * for one decision type, or default_template()'s fallback if unset/blank.
      *
      * @param int $confprogramid The confprogram instance id
+     * @param string $decision One of self::NOTIFIABLE_DECISIONS
      * @return array{subject: string, body: string, bodyformat: int}
      */
-    public static function get_template(int $confprogramid): array {
+    public static function get_template(int $confprogramid, string $decision): array {
         global $DB;
 
         $template = $DB->get_record('confprogram_notiftemplate', [
             'confprogram' => $confprogramid,
-            'notiftype'   => 'decision',
+            'notiftype'   => $decision,
         ]);
 
-        $default = self::default_template();
+        $default = self::default_template($decision);
 
         $subject = ($template && trim((string) $template->subject) !== '') ? $template->subject : $default['subject'];
         $body = ($template && trim((string) $template->body) !== '') ? $template->body : $default['body'];
@@ -129,7 +136,7 @@ class notifier {
             return false;
         }
 
-        $template = self::get_template($confprogramid);
+        $template = self::get_template($confprogramid, $decision);
         $course = get_course((int) $confprogram->course);
 
         // Raw (filtered but unescaped) values: the plain-text subject and a
@@ -142,10 +149,25 @@ class notifier {
             'submissiontitle' => format_string($submission->title, true, ['escape' => false]),
             'coursename'      => format_string($course->fullname, true, ['escape' => false]),
             // Reuses this plugin's existing decision_accept/decision_reject/
-            // decision_waitlist display strings (decisions.php already uses the same
-            // 'decision_' . $decision key convention) rather than inventing new ones.
+            // decision_waitlist/decision_resubmit display strings (decisions.php
+            // already uses the same 'decision_' . $decision key convention) rather
+            // than inventing new ones.
             'decision'        => get_string('decision_' . $decision, 'mod_confprogram'),
         ];
+
+        if ($decision === 'resubmit') {
+            // feedback.php is the real, existing page where a submitter reads
+            // reviewer feedback and resubmits -- only meaningful (and only
+            // accessible, see that page's own phase check) while this decision's
+            // immediate send is actually happening, i.e. during Review phase.
+            $cm = get_coursemodule_from_instance('confprogram', $confprogramid);
+            if ($cm) {
+                $rawcontext['feedbackurl'] = (new \moodle_url('/mod/confprogram/feedback.php', [
+                    'id'           => $cm->id,
+                    'submissionid' => $submissionid,
+                ]))->out(false);
+            }
+        }
 
         foreach (submissions_api::get_speakers($submissionid) as $speaker) {
             if (empty($speaker->userid)) {

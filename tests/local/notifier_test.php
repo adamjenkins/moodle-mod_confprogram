@@ -53,6 +53,11 @@ final class notifier_test extends advanced_testcase {
             'confsubmissionscmid' => $confsubmissionscm->id,
         ]);
 
+        // notificationsenabled defaults to 0 (2026-07-09) -- explicitly enable it
+        // since most tests below exercise actual sending; the test that specifically
+        // covers the disabled case toggles it back off itself.
+        $DB->set_field('confprogram', 'notificationsenabled', 1, ['id' => $confprogram->id]);
+
         if ($phase === 'display') {
             $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogram->id]);
         }
@@ -142,11 +147,13 @@ final class notifier_test extends advanced_testcase {
     }
 
     /**
-     * send_pending_decision_notifications() sends every not-yet-notified
-     * accept/reject/waitlist decision for the instance (simulating the Review ->
-     * Display phase transition), and never sends a 'resubmit' decision.
+     * send_pending_decision_notifications() sends every pending accept/reject/
+     * waitlist decision for the instance (simulating the Review -> Display phase
+     * transition). A 'resubmit' decision is never found pending here because it
+     * already sent immediately at record_decision() time (see the dedicated
+     * resubmit test below).
      */
-    public function test_send_pending_decision_notifications_sends_all_pending_and_skips_resubmit(): void {
+    public function test_send_pending_decision_notifications_sends_all_pending(): void {
         $this->resetAfterTest();
         global $DB;
 
@@ -158,15 +165,22 @@ final class notifier_test extends advanced_testcase {
         $decider = $this->getDataGenerator()->create_user();
 
         api::record_decision($confprogramid, $submission1, 'accept', 1, (int) $decider->id);
+
+        // Resubmit sends immediately, not deferred -- capture and discard that send
+        // so it doesn't confuse the assertions below, which are about the
+        // Display-phase pending flush.
+        $sink = $this->redirectMessages();
         api::record_decision($confprogramid, $submission2, 'resubmit', 1, (int) $decider->id);
+        $this->assertCount(1, $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision'));
+        $sink->clear();
 
         // Switch to Display phase (mirroring view.php's phase-toggle handler) and send.
         $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogramid]);
 
-        $sink = $this->redirectMessages();
-        api::send_pending_decision_notifications($confprogramid);
+        $sent = api::send_pending_decision_notifications($confprogramid);
         $messages = $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision');
 
+        $this->assertSame(1, $sent);
         $this->assertCount(1, $messages);
         $message = reset($messages);
         $this->assertSame((int) $speaker1->id, (int) $message->useridto);
@@ -178,11 +192,12 @@ final class notifier_test extends advanced_testcase {
     }
 
     /**
-     * A submission waitlisted then later accepted generates TWO separate
-     * notifications once sent -- each decision is its own notifiable event, not
-     * just the final state.
+     * A resubmit decision sends its notification immediately when recorded, even
+     * during Review phase -- unlike accept/reject/waitlist, which defer until
+     * Display phase (2026-07-09 revision: resubmit's own feedbackurl only works
+     * during Review phase, so deferring it would make the link dead on arrival).
      */
-    public function test_multiple_decisions_on_one_submission_each_notify_once_sent(): void {
+    public function test_resubmit_sends_immediately_during_review_phase(): void {
         $this->resetAfterTest();
         global $DB;
 
@@ -191,16 +206,90 @@ final class notifier_test extends advanced_testcase {
         $submissionid = $this->create_submission_with_speaker($confsubmissionsid, $speaker);
         $decider = $this->getDataGenerator()->create_user();
 
-        api::record_decision($confprogramid, $submissionid, 'waitlist', 1, (int) $decider->id);
-        api::record_decision($confprogramid, $submissionid, 'accept', 2, (int) $decider->id);
+        $sink = $this->redirectMessages();
+        $decisionid = api::record_decision($confprogramid, $submissionid, 'resubmit', 1, (int) $decider->id);
+        $messages = $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision');
+
+        $this->assertCount(1, $messages);
+        $message = reset($messages);
+        $this->assertSame((int) $speaker->id, (int) $message->useridto);
+        $this->assertStringContainsString('feedback.php', $message->fullmessagehtml);
+
+        $notifiedtime = $DB->get_field('confprogram_decision', 'notifiedtime', ['id' => $decisionid]);
+        $this->assertGreaterThan(0, $notifiedtime);
+    }
+
+    /**
+     * A submission waitlisted then later accepted results in only ONE pending
+     * notification -- the newest (accept) -- not two: the dedup fix (user request,
+     * 2026-07-09) supersedes the earlier still-unsent waitlist row the moment the
+     * accept decision is recorded, so it is permanently excluded from sending.
+     */
+    public function test_newer_decision_supersedes_earlier_unsent_one(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram('review');
+        $speaker = $this->getDataGenerator()->create_user();
+        $submissionid = $this->create_submission_with_speaker($confsubmissionsid, $speaker);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $waitlistid = api::record_decision($confprogramid, $submissionid, 'waitlist', 1, (int) $decider->id);
+        $acceptid = api::record_decision($confprogramid, $submissionid, 'accept', 2, (int) $decider->id);
+
+        $waitlistrow = $DB->get_record('confprogram_decision', ['id' => $waitlistid]);
+        $this->assertSame(1, (int) $waitlistrow->superseded);
+        $this->assertSame(0, (int) $waitlistrow->notifiedtime);
+
+        $this->assertSame(1, api::count_pending_notifications($confprogramid));
+        $pending = api::get_pending_decisions($confprogramid);
+        $this->assertArrayHasKey($acceptid, $pending);
+        $this->assertArrayNotHasKey($waitlistid, $pending);
 
         $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogramid]);
 
         $sink = $this->redirectMessages();
-        api::send_pending_decision_notifications($confprogramid);
+        $sent = api::send_pending_decision_notifications($confprogramid);
         $messages = $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision');
 
-        $this->assertCount(2, $messages);
+        $this->assertSame(1, $sent);
+        $this->assertCount(1, $messages);
+    }
+
+    /**
+     * dismiss_pending_decision() marks a row superseded without touching its
+     * decision/round/decidedby/timecreated fields, and it disappears from
+     * get_pending_decisions()/count_pending_notifications() afterward.
+     */
+    public function test_dismiss_pending_decision(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid, $confsubmissionsid] = $this->create_confprogram('review');
+        $speaker = $this->getDataGenerator()->create_user();
+        $submissionid = $this->create_submission_with_speaker($confsubmissionsid, $speaker);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $decisionid = api::record_decision($confprogramid, $submissionid, 'accept', 1, (int) $decider->id);
+        $this->assertSame(1, api::count_pending_notifications($confprogramid));
+
+        $before = $DB->get_record('confprogram_decision', ['id' => $decisionid]);
+        api::dismiss_pending_decision($confprogramid, $decisionid);
+        $after = $DB->get_record('confprogram_decision', ['id' => $decisionid]);
+
+        $this->assertSame(1, (int) $after->superseded);
+        $this->assertSame($before->decision, $after->decision);
+        $this->assertSame($before->round, $after->round);
+        $this->assertSame($before->decidedby, $after->decidedby);
+        $this->assertSame($before->timecreated, $after->timecreated);
+
+        $this->assertSame(0, api::count_pending_notifications($confprogramid));
+
+        $DB->set_field('confprogram', 'phase', 'display', ['id' => $confprogramid]);
+        $sink = $this->redirectMessages();
+        $sent = api::send_pending_decision_notifications($confprogramid);
+        $this->assertSame(0, $sent);
+        $this->assertCount(0, $sink->get_messages_by_component_and_type('mod_confprogram', 'submissiondecision'));
     }
 
     /**
@@ -245,13 +334,13 @@ final class notifier_test extends advanced_testcase {
 
         [, $confprogramid] = $this->create_confprogram();
 
-        $default = notifier::default_template();
-        $template = notifier::get_template($confprogramid);
+        $default = notifier::default_template('accept');
+        $template = notifier::get_template($confprogramid, 'accept');
         $this->assertSame($default['subject'], $template['subject']);
 
         $DB->insert_record('confprogram_notiftemplate', (object) [
             'confprogram'  => $confprogramid,
-            'notiftype'    => 'decision',
+            'notiftype'    => 'accept',
             'subject'      => 'Custom subject [[decision]]',
             'body'         => 'Custom body',
             'bodyformat'   => FORMAT_HTML,
@@ -259,7 +348,39 @@ final class notifier_test extends advanced_testcase {
             'timemodified' => time(),
         ]);
 
-        $template = notifier::get_template($confprogramid);
+        $template = notifier::get_template($confprogramid, 'accept');
         $this->assertSame('Custom subject [[decision]]', $template['subject']);
+    }
+
+    /**
+     * Each decision type has its own independent template -- configuring 'accept'
+     * does not affect 'reject'/'waitlist'/'resubmit', which still fall back to
+     * their own defaults.
+     */
+    public function test_templates_are_independent_per_decision_type(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        [, $confprogramid] = $this->create_confprogram();
+
+        $DB->insert_record('confprogram_notiftemplate', (object) [
+            'confprogram'  => $confprogramid,
+            'notiftype'    => 'accept',
+            'subject'      => 'Custom accept subject',
+            'body'         => 'Custom accept body',
+            'bodyformat'   => FORMAT_HTML,
+            'timecreated'  => time(),
+            'timemodified' => time(),
+        ]);
+
+        $this->assertSame('Custom accept subject', notifier::get_template($confprogramid, 'accept')['subject']);
+        $this->assertSame(
+            notifier::default_template('reject')['subject'],
+            notifier::get_template($confprogramid, 'reject')['subject']
+        );
+        $this->assertSame(
+            notifier::default_template('resubmit')['subject'],
+            notifier::get_template($confprogramid, 'resubmit')['subject']
+        );
     }
 }
