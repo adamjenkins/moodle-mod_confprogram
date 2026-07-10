@@ -75,7 +75,7 @@ class review_display {
             } else {
                 $reviewerlabel = get_string('anonymousreviewer', 'mod_confprogram', $i);
             }
-            // s(): html_writer::tag() does not escape its content, and a fullname()
+            // Uses s(): html_writer::tag() does not escape its content, and a fullname()
             // can carry markup on sites that import names through channels that skip
             // PARAM_NOTAGS -- same fix decisions.php:281/assign.php already have.
             $out .= \html_writer::tag('h5', s($reviewerlabel));

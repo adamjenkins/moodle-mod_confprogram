@@ -53,7 +53,7 @@ final class notifier_test extends advanced_testcase {
             'confsubmissionscmid' => $confsubmissionscm->id,
         ]);
 
-        // notificationsenabled defaults to 0 (2026-07-09) -- explicitly enable it
+        // Notificationsenabled defaults to 0 (2026-07-09) -- explicitly enable it
         // since most tests below exercise actual sending; the test that specifically
         // covers the disabled case toggles it back off itself.
         $DB->set_field('confprogram', 'notificationsenabled', 1, ['id' => $confprogram->id]);

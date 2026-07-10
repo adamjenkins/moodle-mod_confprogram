@@ -84,32 +84,7 @@ class field_formatter {
             self::$valuescache[$sid] = $values;
         }
 
-        $speakersbysubmission = submissions_api::get_speakers_for_submissions($submissionids);
-        $userids = [];
-        foreach ($speakersbysubmission as $speakers) {
-            foreach ($speakers as $speaker) {
-                if (!empty($speaker->userid)) {
-                    $userids[] = (int) $speaker->userid;
-                }
-            }
-        }
-        $namefields = implode(', ', array_merge(['id'], \core_user\fields::for_name()->get_required_fields()));
-        $users = $userids
-            ? $DB->get_records_list('user', 'id', array_unique($userids), '', $namefields)
-            : [];
-        foreach ($speakersbysubmission as $sid => $speakers) {
-            $names = [];
-            foreach ($speakers as $speaker) {
-                if (!empty($speaker->userid)) {
-                    if (isset($users[(int) $speaker->userid])) {
-                        $names[] = fullname($users[(int) $speaker->userid]);
-                    }
-                } else if (!empty($speaker->name)) {
-                    $names[] = format_string($speaker->name, true, ['escape' => false]);
-                }
-            }
-            self::$speakernamescache[$sid] = $names;
-        }
+        self::$speakernamescache = submissions_api::get_speaker_display_names($submissionids);
     }
 
     /**
@@ -157,8 +132,6 @@ class field_formatter {
      * @return string The formatted value, or '' if the field has no value for this submission
      */
     public static function format_value(string $fieldkey, \stdClass $submission): string {
-        global $DB;
-
         // Note: format_string() (below) HTML-entity-escapes by default, which would violate this method's
         // "never returns HTML" contract (every caller already escapes on output, e.g. s() or
         // an auto-escaping Mustache {{ }} tag) and produce visible double-escaping. Passing
@@ -180,21 +153,10 @@ class field_formatter {
                 return $track ? format_string($track->name, true, $formatopts) : get_string('notrack', 'mod_confsubmissions');
 
             case 'speakers':
-                if (array_key_exists((int) $submission->id, self::$speakernamescache)) {
-                    return implode(', ', self::$speakernamescache[(int) $submission->id]);
+                if (!array_key_exists((int) $submission->id, self::$speakernamescache)) {
+                    self::$speakernamescache += submissions_api::get_speaker_display_names([(int) $submission->id]);
                 }
-                $names = [];
-                foreach (submissions_api::get_speakers((int) $submission->id) as $speaker) {
-                    if (!empty($speaker->userid)) {
-                        $user = \core_user::get_user($speaker->userid);
-                        if ($user) {
-                            $names[] = fullname($user);
-                        }
-                    } else if (!empty($speaker->name)) {
-                        $names[] = format_string($speaker->name, true, $formatopts);
-                    }
-                }
-                return implode(', ', $names);
+                return implode(', ', self::$speakernamescache[(int) $submission->id] ?? []);
 
             default:
                 $fieldid = field_settings::optional_fieldid_from_key($fieldkey);

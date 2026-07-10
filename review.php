@@ -321,7 +321,7 @@ if ($canviewidentity) {
     foreach (submissions_api::get_speakers($submissionid) as $speaker) {
         if (!empty($speaker->userid)) {
             $user = \core_user::get_user($speaker->userid);
-            // s(): html_writer::tag() below does not escape its content, and
+            // Uses s(): html_writer::tag() below does not escape its content, and
             // fullname() is not guaranteed markup-free -- same fix as
             // decisions.php/assign.php's own name labels.
             $speakerlines[] = $user ? s(fullname($user)) : '-';
@@ -342,20 +342,32 @@ echo html_writer::tag('p', html_writer::tag('strong', get_string('track', 'mod_c
 
 echo html_writer::tag('div', format_text($submission->abstract, FORMAT_PLAIN), ['class' => 'mb-3']);
 
-// Every organiser-defined optional field is shown here unconditionally, regardless of
-// the Display-phase show-in-list/show-in-modal visibility matrix (classes/local/
+// Every organiser-defined optional field is shown here, regardless of the
+// Display-phase show-in-list/show-in-modal visibility matrix (classes/local/
 // field_settings.php) -- that matrix only governs what the public Display-phase list
-// surfaces; a reviewer here always sees everything. Fields are identified by their
-// confsubmissions_field id, not name: mod_confsubmissions's fields are organiser-free-text
-// (not a fixed lang-string vocabulary), so a field's own name is used directly as its
-// label rather than looked up via get_string().
-$fieldvalues = submissions_api::get_optional_field_values($submissionid);
-foreach (submissions_api::get_fields($confsubmissionscm->instance) as $field) {
-    $value = $fieldvalues[$field->id] ?? '';
-    if ($value === '') {
-        continue;
+// surfaces; a reviewer here always sees everything that isn't blind-review-gated.
+// Fields are identified by their confsubmissions_field id, not name:
+// mod_confsubmissions's fields are organiser-free-text (not a fixed lang-string
+// vocabulary), so a field's own name is used directly as its label rather than
+// looked up via get_string().
+//
+// Gated behind $canviewidentity, same coarse-grained "hide everything" approach as
+// the Speakers block above: fields have no per-field identity/PII tag today (only
+// showinlist/showinmodal Display-phase visibility), so any organiser-defined field
+// (e.g. an "Author bio" free-text field) could be identifying, and there is no way
+// to tell which ones safely aren't. Fetched only when visible, same
+// fetch-gated defence-in-depth as the Speakers block.
+if ($canviewidentity) {
+    $fieldvalues = submissions_api::get_optional_field_values($submissionid);
+    foreach (submissions_api::get_fields($confsubmissionscm->instance) as $field) {
+        $value = $fieldvalues[$field->id] ?? '';
+        if ($value === '') {
+            continue;
+        }
+        echo html_writer::tag('p', html_writer::tag('strong', format_string($field->name) . ': ') . s($value));
     }
-    echo html_writer::tag('p', html_writer::tag('strong', format_string($field->name) . ': ') . s($value));
+} else {
+    echo $OUTPUT->notification(get_string('fieldshidden', 'mod_confprogram'), 'info');
 }
 
 echo $OUTPUT->heading(get_string('review', 'mod_confprogram'), 3);

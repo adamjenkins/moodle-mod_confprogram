@@ -107,7 +107,7 @@ if (data_submitted()) {
             (int) $USER->id
         );
 
-        // $decisionsreturnurl, not $pageurl: keeps the active track/status filters
+        // Uses $decisionsreturnurl, not $pageurl: keeps the active track/status filters
         // through the redirect, matching assign.php's behaviour.
         redirect(
             $decisionsreturnurl,

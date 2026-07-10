@@ -72,18 +72,18 @@ final class speaker_submissions_test extends advanced_testcase {
         $otherowner = $this->getDataGenerator()->create_user();
         $unrelated = $this->getDataGenerator()->create_user();
 
-        // $user is the owner and sole (primary) speaker.
+        // The $user is the owner and sole (primary) speaker.
         $ownsubmissionid = $this->create_submission((int) $confsubmissions->id, $user, [
             ['userid' => $user->id],
         ]);
 
-        // $user is a co-presenter on a submission owned by someone else.
+        // The $user is a co-presenter on a submission owned by someone else.
         $cosubmissionid = $this->create_submission((int) $confsubmissions->id, $otherowner, [
             ['userid' => $otherowner->id],
             ['userid' => $user->id],
         ]);
 
-        // $user appears nowhere on this one -- a guest (no userid) speaker plus the
+        // The $user appears nowhere on this one -- a guest (no userid) speaker plus the
         // unrelated owner as primary.
         $this->create_submission((int) $confsubmissions->id, $unrelated, [
             ['userid' => $unrelated->id],

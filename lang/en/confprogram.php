@@ -87,6 +87,7 @@ $string['error:unvetted'] = 'This submission has been flagged as unvetted and is
 $string['favourite'] = 'Favourite';
 $string['favouritesonly'] = 'Favourites only';
 $string['field'] = 'Field';
+$string['fieldshidden'] = 'Additional submission fields are hidden while blind review is on, since they may contain identifying information.';
 $string['filteredbytrack'] = 'Showing submissions filtered to track: {$a}.';
 $string['focusedsubmission'] = 'Showing only the resubmitted submission below, for re-assignment.';
 $string['grade'] = 'Grade';

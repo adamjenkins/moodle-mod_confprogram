@@ -82,17 +82,34 @@ final class identity_test extends advanced_testcase {
 
     /**
      * When blind review is on, a user holding mod/confprogram:viewidentity
-     * (granted to the editingteacher archetype by default) can still see
-     * identity: the capability bypasses the blind setting.
+     * (granted to the manager archetype by default) can still see identity:
+     * the capability bypasses the blind setting.
      */
     public function test_identity_visible_with_viewidentity_capability_even_when_blind(): void {
         $this->resetAfterTest();
 
         [$course, $context] = $this->create_confprogram(true);
-        $teacher = $this->getDataGenerator()->create_user();
-        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'editingteacher');
+        $manager = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($manager->id, $course->id, 'manager');
 
-        $this->assertTrue(identity::can_view_identity($context, (int) $teacher->id));
+        $this->assertTrue(identity::can_view_identity($context, (int) $manager->id));
+    }
+
+    /**
+     * A reviewer given the editingteacher role does NOT bypass blind review
+     * (2026-07-10 fix): mod/confprogram:viewidentity previously defaulted
+     * CAP_ALLOW for editingteacher too, silently deblinding any reviewer
+     * given that role regardless of the instance's blindreview setting. Only
+     * 'manager' keeps the bypass now.
+     */
+    public function test_editingteacher_does_not_bypass_blind_review(): void {
+        $this->resetAfterTest();
+
+        [$course, $context] = $this->create_confprogram(true);
+        $editingteacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($editingteacher->id, $course->id, 'editingteacher');
+
+        $this->assertFalse(identity::can_view_identity($context, (int) $editingteacher->id));
     }
 
     /**

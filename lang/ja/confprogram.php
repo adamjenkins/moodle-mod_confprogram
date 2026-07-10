@@ -87,6 +87,7 @@ $string['error:unvetted'] = 'この応募は査読対象外としてフラグが
 $string['favourite'] = 'お気に入り';
 $string['favouritesonly'] = 'お気に入りのみ';
 $string['field'] = '項目';
+$string['fieldshidden'] = '匿名査読が有効なため、身元が特定される可能性のある追加の応募項目は非表示になっています。';
 $string['filteredbytrack'] = 'トラックで絞り込み中: {$a}';
 $string['focusedsubmission'] = '再割り当てのため、再提出された下記の応募のみを表示しています。';
 $string['grade'] = '評点';

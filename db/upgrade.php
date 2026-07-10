@@ -315,5 +315,23 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026070903, 'confprogram');
     }
 
+    if ($oldversion < 2026071000) {
+        // Mod/confprogram:viewidentity's editingteacher archetype default was removed
+        // from db/access.php (2026-07-10 fix: a reviewer given the editingteacher role
+        // silently bypassed blind review via role defaults, regardless of the
+        // instance's blindreview setting -- see that capability's own access.php
+        // comment). Changing an archetype in access.php only affects FRESH installs;
+        // an already-installed site's role_capabilities row for editingteacher was set
+        // by the OLD default and is never touched by Moodle's own capability-sync
+        // logic on upgrade -- it has to be explicitly revoked here, or this fix
+        // silently does nothing on any site that installed this plugin before today.
+        $editingteacherrole = $DB->get_record('role', ['shortname' => 'editingteacher']);
+        if ($editingteacherrole) {
+            unassign_capability('mod/confprogram:viewidentity', $editingteacherrole->id);
+        }
+
+        upgrade_mod_savepoint(true, 2026071000, 'confprogram');
+    }
+
     return true;
 }

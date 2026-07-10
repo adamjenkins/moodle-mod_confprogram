@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Blind review fixes (2026-07-10, user-reported):
+  - **Organiser-defined custom fields are now hidden from reviewers when
+    blind review is on**, gated the same way the Speakers block already
+    was (`review.php`) — previously shown unconditionally, so a field like
+    "Author bio" could leak identity even with blind review enabled.
+  - **`mod/confprogram:viewidentity` no longer defaults to the
+    `editingteacher` archetype**, only `manager` — a reviewer given the
+    `editingteacher` role (a common "co-organiser who also reviews" site
+    setup) was previously silently bypassing blind review via role
+    defaults regardless of the instance's `blindreview` setting. Sites
+    relying on the old default should grant `viewidentity` explicitly at
+    the module/course context instead.
+  - Added `tests/review_page_test.php`, output-level coverage of the above
+    (the existing `identity_test.php` only tested the pure helper, which
+    would not have caught either issue).
+  - **Upgrade step added to actually revoke the stale grant on already-
+    installed sites**: removing an archetype default from `db/access.php`
+    only affects fresh installs — an existing site's `role_capabilities`
+    row for `editingteacher` (set by the old default at install time) is
+    never touched by Moodle's own capability sync on upgrade, so the fix
+    above would otherwise silently do nothing on any site that installed
+    this plugin before today. `db/upgrade.php`'s 2026071000 step calls
+    `unassign_capability()` explicitly. Caught by real browser verification
+    against an already-provisioned test site, not by PHPUnit (which always
+    starts from a fresh install, masking exactly this class of bug).
+
 - Notifications overhaul + modal fix (2026-07-09, user-requested):
   - **`notificationsenabled` now defaults to off** for newly created
     instances (existing instances are untouched by the upgrade step).

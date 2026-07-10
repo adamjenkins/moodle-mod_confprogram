@@ -757,11 +757,13 @@ class api {
 
         $sent = 0;
         foreach (self::get_pending_decisions($confprogramid) as $decision) {
-            if (\mod_confprogram\local\notifier::notify_decision(
-                $confprogramid,
-                (int) $decision->submissionid,
-                $decision->decision
-            )) {
+            if (
+                \mod_confprogram\local\notifier::notify_decision(
+                    $confprogramid,
+                    (int) $decision->submissionid,
+                    $decision->decision
+                )
+            ) {
                 $DB->set_field('confprogram_decision', 'notifiedtime', time(), ['id' => $decision->id]);
                 $sent++;
             }

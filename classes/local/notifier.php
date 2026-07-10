@@ -156,7 +156,7 @@ class notifier {
         ];
 
         if ($decision === 'resubmit') {
-            // feedback.php is the real, existing page where a submitter reads
+            // Feedback.php is the real, existing page where a submitter reads
             // reviewer feedback and resubmits -- only meaningful (and only
             // accessible, see that page's own phase check) while this decision's
             // immediate send is actually happening, i.e. during Review phase.

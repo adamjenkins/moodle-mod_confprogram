@@ -102,7 +102,7 @@ if (data_submitted() && optional_param('togglephase', 0, PARAM_BOOL)) {
         api::sync_submission_statuses_to_confsubmissions((int) $confprogram->id);
     }
 
-    // redirect() disables the clean Location-header redirect and instead renders
+    // Redirect() disables the clean Location-header redirect and instead renders
     // its "Error output, so disabling automatic redirect." fallback page whenever
     // error_get_last() still holds a warning/notice/deprecation matching $CFG->debug
     // -- and PHP does not reset that global at the start of a new request under
@@ -515,7 +515,7 @@ if ($confprogram->phase === 'review') {
             ]);
         }
 
-        // $row->schedule was already fetched by display_list::attach_schedule() --
+        // The $row->schedule field was already fetched by display_list::attach_schedule() --
         // this used to re-fetch it per row via schedule_info::get_for_submission()
         // (FABLE.md review, 2026-07-09).
         $scheduletext = schedule_info::format_for_display($row->schedule);

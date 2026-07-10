@@ -67,13 +67,20 @@ $capabilities = [
 
     // See real submitter/reviewer identities even when blind review is switched on,
     // i.e. bypasses the blinding.
+    // Bypasses blind review's identity-hiding entirely -- deliberately restricted to
+    // 'manager' only (not 'editingteacher'), so a reviewer given the editingteacher
+    // role (common for a site's "co-organiser who also reviews" setup) is blinded
+    // like any other reviewer rather than silently bypassing the instance's
+    // blindreview setting via role defaults (2026-07-10, real report: an
+    // editingteacher-role reviewer seeing identities was mistaken for the Speakers
+    // block itself not being gated, when the actual cause was this capability's
+    // previous default).
     'mod/confprogram:viewidentity' => [
         'riskbitmask'  => RISK_PERSONAL,
         'captype'      => 'read',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes'   => [
-            'editingteacher' => CAP_ALLOW,
-            'manager'        => CAP_ALLOW,
+            'manager' => CAP_ALLOW,
         ],
     ],
 
