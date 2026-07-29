@@ -1,0 +1,23 @@
+# camp listing manifest — descriptive content for your plugin's page.
+# Edit freely and commit; camp ingests this file at each tagged release.
+# Schema: https://camp-registry.org/schema/listing.schema.json
+name: mod_confprogram
+summary: 'Conference Program — a Moodle activity that takes submissions from mod_confsubmissions through a reviewer workflow, then publishes the accepted programme.'
+description: |
+  Takes submissions from `mod_confsubmissions` through a reviewer workflow:
+  rubric-based review on Moodle's advanced grading API (optionally blind, with
+  identities hidden in both directions), individual or group reviewer
+  assignment, unvetted keynotes/panels, and bulk Accept / Reject / Resubmit /
+  Waitlist decisions on a filterable report — then publishes the accepted
+  programme. Part of the Conference Tools suite.
+labels:
+  # Required disclosure labels — pick all that apply (RFC §4.7):
+  #   fully-free | freemium | paid-service | external-account
+  #   donation-supported | commercial-support-available
+  - fully-free
+# screenshots:
+#   - path: .camp/screenshots/overview.png
+#     caption: Main view
+# links:
+#   docs: https://…
+#   issues: https://…
