@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Declare Moodle 5.3 support: `$plugin->supported = [502, 503]` in
+  `version.php`; README Requirements updated to match.
+- Boost dark colour mode (Moodle 5.3): the date-band and withdrawn-row
+  backgrounds (desktop and mobile layouts; the desktop date band gains a
+  subtle tertiary background in dark mode only), the muted text greys and the
+  list borders now follow the colour mode instead of staying light-mode
+  colours behind light text. Light mode is unchanged.
+- CI: add non-blocking moodle.git `main` (5.3) jobs with PostgreSQL 17 /
+  MariaDB 11.4; the MariaDB health check now uses `mariadb-admin ping`; Grunt
+  does not run on `main`.
+
 - Blind review fixes (2026-07-10, user-reported):
   - **Organiser-defined custom fields are now hidden from reviewers when
     blind review is on**, gated the same way the Speakers block already

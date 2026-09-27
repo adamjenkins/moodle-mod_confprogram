@@ -1,5 +1,11 @@
 # Changes
 
+## Unreleased
+
+- Declare Moodle 5.3 support.
+- Readable in Boost dark colour mode (Moodle 5.3): programme list backgrounds,
+  muted text and borders follow the colour mode.
+
 ## v0.1.0
 
 Initial release. Not yet tagged — this plugin is still in development.

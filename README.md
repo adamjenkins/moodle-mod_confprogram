@@ -35,7 +35,7 @@ The activity runs in two phases, switched from edit mode.
 
 ## Requirements
 
-- Moodle 5.2 (`2026042000`) or later.
+- Moodle 5.2 (`2026042000`) or later; supported on Moodle 5.2 and 5.3 (`$plugin->supported = [502, 503]`).
 - mod_confsubmissions installed in the same course.
 
 ## Installation

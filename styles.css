@@ -224,3 +224,37 @@
     text-overflow: clip;
     overflow-wrap: break-word;
 }
+
+/*
+ * Boost dark colour mode (Moodle 5.3, [data-bs-theme="dark"]). The fixed light-mode
+ * colours above would otherwise leave the date band and withdrawn rows as light panels
+ * behind the mode's light body text and link colours, and the muted greys too dim on the
+ * dark page. Light mode keeps the exact colours above; these overrides only apply in dark
+ * mode, and the --bs-* properties they use also exist on Moodle 5.2 (Bootstrap 5.3 _root.scss).
+ */
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-date-band-cell {
+    background: var(--bs-tertiary-bg);
+}
+
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-row-withdrawn,
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-row-withdrawn [role="cell"] {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-favourite-toggle,
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-schedule,
+[data-bs-theme="dark"] .mod_confprogram-submission-modal .confprogram-schedule,
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-row-item [role="cell"]::before {
+    color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-favourite-toggle.confprogram-favourited {
+    color: #f0ad4e;
+}
+
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-grid [role="cell"],
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-grid [role="columnheader"],
+[data-bs-theme="dark"] .mod_confprogram-list .confprogram-row-item {
+    border-color: var(--bs-border-color);
+}
