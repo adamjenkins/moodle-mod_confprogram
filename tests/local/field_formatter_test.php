@@ -49,6 +49,7 @@ final class field_formatter_test extends advanced_testcase {
      * Creates a bare confsubmissions_submission row directly.
      *
      * @param int $confsubmissionsid
+     * @param int|null $trackid
      * @return \stdClass
      */
     private function create_submission(int $confsubmissionsid, ?int $trackid = null): \stdClass {

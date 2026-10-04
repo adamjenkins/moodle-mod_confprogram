@@ -54,6 +54,9 @@ final class decision_report_test extends advanced_testcase {
     /**
      * Inserts a bare confsubmissions_submission row directly (mirrors
      * \mod_confprogram\local\field_formatter_test's own helper).
+     *
+     * @param int $confsubmissionsid
+     * @return \stdClass
      */
     private function create_submission(int $confsubmissionsid): \stdClass {
         global $DB;
