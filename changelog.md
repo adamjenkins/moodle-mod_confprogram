@@ -1,7 +1,18 @@
 # Changelog
 
-## Unreleased
+## v0.1.1
 
+First tagged release: the in-development 0.1.0 was never tagged, so every
+entry in this section ships together.
+
+- Composer: `composer.json` now requires `moodle/composer-installer` `^1.0`
+  (was `*`) and `adamjenkins/moodle-mod_confsubmissions` `^0.1`, matching the
+  `mod_confsubmissions` dependency in `version.php`, so `composer require`
+  pulls in the dependency too. The `moodle/moodle` constraint stays `^5.2`.
+- Release infrastructure: releases are published to the camp registry by a new
+  tag-triggered workflow (replacing the retired moodle.org Plugins directory
+  workflow), and `.gitattributes` keeps `.github`, `.camp` and other dev files
+  out of the distribution ZIP.
 - Declare Moodle 5.3 support: `$plugin->supported = [502, 503]` in
   `version.php`; README Requirements updated to match.
 - Boost dark colour mode (Moodle 5.3): the date-band and withdrawn-row
