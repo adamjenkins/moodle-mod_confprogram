@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Checkbox and date answers to optional submission fields show as Yes/No and a date in the programme
+  list and detail window, as in Conference Submissions, instead of the stored 1/0 or timestamp.
+
 ## v0.1.1
 
 First tagged release: the in-development 0.1.0 was never tagged, so every

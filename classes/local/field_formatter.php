@@ -46,6 +46,9 @@ class field_formatter {
     /** @var array<int, string[]> Ready-to-join speaker display names keyed by submissionid, warmed by preload. */
     private static array $speakernamescache = [];
 
+    /** @var array<int, \stdClass|false> confsubmissions_field rows keyed by id (false: deleted), filled on first use. */
+    private static array $fieldcache = [];
+
     /**
      * Warms request-scoped caches so the per-row accessors below (format_value(),
      * get_track_pill_html()) answer from memory instead of issuing one query per
@@ -97,6 +100,7 @@ class field_formatter {
         self::$trackcache = null;
         self::$valuescache = [];
         self::$speakernamescache = [];
+        self::$fieldcache = [];
     }
 
     /**
@@ -164,10 +168,37 @@ class field_formatter {
                     return '';
                 }
                 if (array_key_exists((int) $submission->id, self::$valuescache)) {
-                    return (string) (self::$valuescache[(int) $submission->id][$fieldid] ?? '');
+                    $raw = (string) (self::$valuescache[(int) $submission->id][$fieldid] ?? '');
+                } else {
+                    $values = submissions_api::get_optional_field_values((int) $submission->id);
+                    $raw = (string) ($values[$fieldid] ?? '');
                 }
-                $values = submissions_api::get_optional_field_values((int) $submission->id);
-                return (string) ($values[$fieldid] ?? '');
+                return $raw === '' ? '' : self::format_optional_value($fieldid, $raw, $formatopts);
+        }
+    }
+
+    /**
+     * Formats a stored optional-field answer by the field's type, the way Conference Submissions'
+     * own detail page does (submission_detail::format_field_value()): a checkbox is stored as
+     * '0'/'1' and a date as a timestamp, so showing the raw value printed "1" or "1793836800".
+     *
+     * @param int $fieldid The confsubmissions_field id
+     * @param string $raw The stored value, never ''
+     * @param array $formatopts Options for format_string() (plain text, no escaping)
+     * @return string Plain text, never HTML
+     */
+    private static function format_optional_value(int $fieldid, string $raw, array $formatopts): string {
+        if (!array_key_exists($fieldid, self::$fieldcache)) {
+            self::$fieldcache[$fieldid] = submissions_api::get_field($fieldid);
+        }
+        $field = self::$fieldcache[$fieldid];
+        switch ($field ? $field->type : '') {
+            case 'checkbox':
+                return $raw === '1' ? get_string('yes') : get_string('no');
+            case 'date':
+                return userdate((int) $raw, get_string('strftimedate'));
+            default:
+                return format_string($raw, true, $formatopts);
         }
     }
 

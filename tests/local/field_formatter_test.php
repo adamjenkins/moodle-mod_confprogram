@@ -38,6 +38,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
  */
 #[CoversClass(field_formatter::class)]
 final class field_formatter_test extends advanced_testcase {
+    #[\Override]
+    protected function setUp(): void {
+        parent::setUp();
+        // The formatter's caches are request-scoped statics, and ids repeat across tests.
+        field_formatter::reset_caches();
+    }
+
     /**
      * Creates a bare confsubmissions_submission row directly.
      *
@@ -137,6 +144,38 @@ final class field_formatter_test extends advanced_testcase {
         $value = field_formatter::format_value(field_settings::OPTIONAL_FIELD_PREFIX . $fieldid, $submission);
 
         $this->assertSame('Main Hall please', $value);
+    }
+
+    /**
+     * Checkbox and date answers are formatted by field type, as Conference Submissions' own
+     * detail page shows them: Yes/No and a date, not the stored '1' or timestamp. Checked on both
+     * the single-submission path and the preloaded list path.
+     */
+    public function test_format_value_formats_checkbox_and_date_by_type(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $confsubmissions = $this->getDataGenerator()->create_module('confsubmissions', ['course' => $course->id]);
+        $checkboxid = submissions_api::add_field((int) $confsubmissions->id, 'Needs a projector', 'checkbox', null, false);
+        $dateid = submissions_api::add_field((int) $confsubmissions->id, 'Available from', 'date', null, false);
+        $yes = $this->create_submission((int) $confsubmissions->id);
+        $no = $this->create_submission((int) $confsubmissions->id);
+        $timestamp = make_timestamp(2026, 11, 14);
+        foreach ([[$yes, $checkboxid, '1'], [$no, $checkboxid, '0'], [$yes, $dateid, (string) $timestamp]] as [$s, $f, $v]) {
+            $DB->insert_record('confsubmissions_fieldval', (object) ['submissionid' => $s->id, 'fieldid' => $f, 'value' => $v]);
+        }
+        $checkbox = field_settings::OPTIONAL_FIELD_PREFIX . $checkboxid;
+        $date = field_settings::OPTIONAL_FIELD_PREFIX . $dateid;
+
+        $this->assertSame(get_string('yes'), field_formatter::format_value($checkbox, $yes));
+        $this->assertSame(get_string('no'), field_formatter::format_value($checkbox, $no));
+        $this->assertSame(userdate($timestamp, get_string('strftimedate')), field_formatter::format_value($date, $yes));
+
+        field_formatter::reset_caches();
+        field_formatter::preload_for_submissions([$yes, $no]);
+        $this->assertSame(get_string('yes'), field_formatter::format_value($checkbox, $yes));
+        $this->assertSame(get_string('no'), field_formatter::format_value($checkbox, $no));
     }
 
     /**
