@@ -15,9 +15,21 @@ labels:
   #   fully-free | freemium | paid-service | external-account
   #   donation-supported | commercial-support-available
   - fully-free
-# screenshots:
-#   - path: .camp/screenshots/overview.png
-#     caption: Main view
+screenshots:
+  - path: .camp/screenshots/01-assign-reviewers.png
+    caption: Assigning reviewers to submissions, with track labels and a track filter.
+  - path: .camp/screenshots/02-review-queue.png
+    caption: 'A reviewer''s queue: pending reviews (including a resubmitted proposal in round 2) and completed reviews with scores.'
+  - path: .camp/screenshots/03-blind-rubric-review.png
+    caption: 'Blind review: the reviewer sees the title, track and abstract but not the author, and scores it with a Moodle rubric.'
+  - path: .camp/screenshots/04-decision-report.png
+    caption: 'The Decision report: filters, bulk decisions, each reviewer''s score and the Start a new round link.'
+  - path: .camp/screenshots/05-accepted-programme.png
+    caption: 'Display phase, as an attendee: accepted sessions with track, speakers, time and room (from Conference Scheduler) and favourite stars.'
+  - path: .camp/screenshots/06-session-details.png
+    caption: The session detail window with the abstract, speakers and the fields the organiser chose to show.
+  - path: .camp/screenshots/07-display-settings.png
+    caption: 'Display field settings: which fields appear in the list and in the detail window.'
 # links:
 #   docs: https://…
 #   issues: https://…
