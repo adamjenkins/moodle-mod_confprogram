@@ -26,7 +26,7 @@
     background: none;
     border: 0;
     cursor: pointer;
-    color: #6c757d;
+    color: var(--mds-text-muted, var(--bs-secondary-color, #6c757d));
     font-size: 1.1rem;
     line-height: 1;
 }
@@ -37,7 +37,7 @@
 
 .mod_confprogram-list .confprogram-schedule,
 .mod_confprogram-submission-modal .confprogram-schedule {
-    color: #6c757d;
+    color: var(--mds-text-muted, var(--bs-secondary-color, #6c757d));
 }
 
 .mod_confprogram-submission-modal .confprogram-field-value {
@@ -121,7 +121,7 @@
     .mod_confprogram-list .confprogram-grid [role="columnheader"] {
         padding: 0.5rem 0.25rem;
         overflow-wrap: break-word;
-        border-bottom: 1px solid #dee2e6;
+        border-bottom: 1px solid var(--mds-border-default, var(--bs-border-color, #dee2e6));
     }
 
     .mod_confprogram-list .confprogram-grid [role="columnheader"] {
@@ -133,8 +133,8 @@
      * withdrawn treatment is applied to each of ITS cells individually instead of the
      * row; adjacent cells in the same grid row still read as one continuous grey band. */
     .mod_confprogram-list .confprogram-row-withdrawn [role="cell"] {
-        background: #f1f1f1;
-        color: #6c757d;
+        background: var(--mds-bg-surface-strong, var(--bs-secondary-bg, #f1f1f1));
+        color: var(--mds-text-muted, var(--bs-secondary-color, #6c757d));
     }
 }
 
@@ -157,7 +157,7 @@
         display: block;
         font-weight: 700;
         padding: 0.85rem 0.5rem;
-        background: #eef1f5;
+        background: var(--mds-bg-surface-strong, var(--bs-secondary-bg, #eef1f5));
         border-radius: 0.25rem;
     }
 
@@ -176,7 +176,7 @@
         grid-auto-columns: minmax(0, 1fr);
         column-gap: 0.75rem;
         margin-bottom: 1rem;
-        border: 1px solid #dee2e6;
+        border: 1px solid var(--mds-border-default, var(--bs-border-color, #dee2e6));
         border-radius: 0.25rem;
         padding: 0.5rem;
     }
@@ -192,12 +192,12 @@
         display: block;
         font-weight: bold;
         font-size: 0.8rem;
-        color: #6c757d;
+        color: var(--mds-text-muted, var(--bs-secondary-color, #6c757d));
     }
 
     .mod_confprogram-list .confprogram-row-withdrawn {
-        background: #f1f1f1;
-        color: #6c757d;
+        background: var(--mds-bg-surface-strong, var(--bs-secondary-bg, #f1f1f1));
+        color: var(--mds-text-muted, var(--bs-secondary-color, #6c757d));
     }
 }
 
@@ -226,11 +226,11 @@
 }
 
 /*
- * Boost dark colour mode (Moodle 5.3, [data-bs-theme="dark"]). The fixed light-mode
- * colours above would otherwise leave the date band and withdrawn rows as light panels
- * behind the mode's light body text and link colours, and the muted greys too dim on the
- * dark page. Light mode keeps the exact colours above; these overrides only apply in dark
- * mode, and the --bs-* properties they use also exist on Moodle 5.2 (Bootstrap 5.3 _root.scss).
+ * Boost dark colour mode (Moodle 5.3, [data-bs-theme="dark"]). The neutral colours above
+ * use Design System tokens (--mds-*, 5.3) falling back to Bootstrap variables (--bs-*, 5.0+)
+ * and then to the original literal (4.5); these explicit dark-mode overrides predate that
+ * and are kept so dark mode renders exactly as before. They only apply in dark mode, and
+ * the --bs-* properties they use also exist on Moodle 5.2 (Bootstrap 5.3 _root.scss).
  */
 [data-bs-theme="dark"] .mod_confprogram-list .confprogram-date-band-cell {
     background: var(--bs-tertiary-bg);
