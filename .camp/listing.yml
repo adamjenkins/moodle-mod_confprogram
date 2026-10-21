@@ -1,15 +1,45 @@
 # camp listing manifest — descriptive content for your plugin's page.
 # Edit freely and commit; camp ingests this file at each tagged release.
 # Schema: https://camp-registry.org/schema/listing.schema.json
-name: mod_confprogram
-summary: 'Conference Program — a Moodle activity that takes submissions from mod_confsubmissions through a reviewer workflow, then publishes the accepted programme.'
+name: Conference Program
+summary: 'Conference Program is a Moodle activity that peer-reviews Conference Submissions proposals with a rubric (optionally blind), records decisions and publishes the accepted programme.'
 description: |
-  Takes submissions from `mod_confsubmissions` through a reviewer workflow:
-  rubric-based review on Moodle's advanced grading API (optionally blind, with
-  identities hidden in both directions), individual or group reviewer
-  assignment, unvetted keynotes/panels, and bulk Accept / Reject / Resubmit /
-  Waitlist decisions on a filterable report — then publishes the accepted
-  programme. Part of the Conference Tools suite.
+  Conference Program takes the proposals collected by a Conference Submissions
+  activity (`mod_confsubmissions`) through peer review, then publishes the
+  accepted sessions to attendees. It is part of the Conference Tools suite,
+  with Conference Submissions, Conference Scheduler and Conference Check-in.
+
+  **Review phase**
+
+  - Assign individual reviewers, or a course group of reviewers in group-review
+    mode, with a track filter and a per-round review limit for each reviewer.
+  - Reviewers score each abstract with a rubric from Moodle's advanced grading.
+  - Optional blind review: reviewers do not see the speakers or custom fields,
+    and presenters do not see reviewer names. Only managers see identities by
+    default (`mod/confprogram:viewidentity`).
+  - Mark invited keynotes or panels as unvetted to keep them out of review.
+  - A Decision report with each reviewer's score, track and decision filters,
+    and Accept / Reject / Waitlist / Resubmit row by row or in bulk.
+  - Resubmit gives the presenter the reviewers' feedback at once; a Start a new
+    round link reassigns the resubmitted proposals.
+
+  **Decisions stay private until you publish.** Accept, reject and waitlist
+  decisions stay off presenters' pages until the organiser switches to the
+  Display phase, and their notifications go out only when the organiser sends
+  them. Decision notifications are off until turned on, use editable templates
+  per decision type and, except for Resubmit (sent at once), wait in a queue
+  the organiser can review before sending.
+
+  **Display phase:** the accepted sessions with track, speakers and, from
+  Conference Scheduler, day, time and room; a day selector, a favourites filter
+  and a detail window. Favourites are shared with Conference Scheduler's My
+  timetable. The organiser chooses which fields appear in the list and in the
+  detail window.
+
+  Backup and restore (the rubric and settings always; reviews and decisions
+  with user data) and course reset are supported, and the privacy API covers
+  export and deletion. Requires Moodle
+  5.2 or 5.3 and `mod_confsubmissions`. No external service or account is used.
 labels:
   # Required disclosure labels — pick all that apply (RFC §4.7):
   #   fully-free | freemium | paid-service | external-account
@@ -25,11 +55,11 @@ screenshots:
   - path: .camp/screenshots/04-decision-report.png
     caption: 'The Decision report: filters, bulk decisions, each reviewer''s score and the Start a new round link.'
   - path: .camp/screenshots/05-accepted-programme.png
-    caption: 'Display phase, as an attendee: accepted sessions with track, speakers, time and room (from Conference Scheduler) and favourite stars.'
+    caption: 'As an attendee: accepted sessions with track, speakers, time and room (from Conference Scheduler) and favourite stars.'
   - path: .camp/screenshots/06-session-details.png
     caption: The session detail window with the abstract, speakers and the fields the organiser chose to show.
   - path: .camp/screenshots/07-display-settings.png
     caption: 'Display field settings: which fields appear in the list and in the detail window.'
-# links:
-#   docs: https://…
-#   issues: https://…
+links:
+  docs: https://github.com/adamjenkins/conference-tools-for-moodle
+  issues: https://github.com/adamjenkins/moodle-mod_confprogram/issues
