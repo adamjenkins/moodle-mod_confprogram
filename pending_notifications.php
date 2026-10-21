@@ -62,9 +62,9 @@ if (data_submitted()) {
     redirect($pageurl);
 }
 
+// The activity name is already shown by core's page/activity header (see view.php).
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(get_string('pendingnotificationsheading', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('pendingnotificationsheading', 'mod_confprogram'), $PAGE->activityheader->get_heading_level());
 
 $pending = api::get_pending_decisions((int) $confprogram->id);
 

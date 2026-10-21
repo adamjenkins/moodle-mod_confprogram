@@ -120,9 +120,9 @@ if ($form->is_cancelled()) {
     redirect($pageurl, get_string('notiftemplatesaved', 'mod_confprogram'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
+// The activity name is already shown by core's page/activity header (see view.php).
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(get_string('managenotifications', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('managenotifications', 'mod_confprogram'), $PAGE->activityheader->get_heading_level());
 
 $tablinks = [];
 foreach (notifier::NOTIFIABLE_DECISIONS as $type) {

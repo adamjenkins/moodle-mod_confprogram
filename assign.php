@@ -87,7 +87,6 @@ $getownsubmission = function (int $submissionid) use ($confsubmissionscm): ?\std
 // so assignments cannot still be mutated after the instance switches to Display phase.
 if ($confprogram->phase !== 'review') {
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
     echo $OUTPUT->notification(get_string('notinreviewphase', 'mod_confprogram'), 'info');
     echo $OUTPUT->footer();
     exit;
@@ -139,9 +138,10 @@ if (data_submitted()) {
     }
 }
 
+// The activity name is already shown by core's page/activity header (see view.php).
+$headinglevel = $PAGE->activityheader->get_heading_level();
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(get_string('assignreviewers', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('assignreviewers', 'mod_confprogram'), $headinglevel);
 
 $unvettedids = array_map('intval', array_column(
     $DB->get_records('confprogram_unvetted', ['confprogram' => $confprogram->id], '', 'id, submissionid'),
@@ -279,7 +279,7 @@ foreach ($submissions as $submission) {
 echo html_writer::table($table);
 
 if ($confprogram->groupreviewmode) {
-    echo $OUTPUT->heading(get_string('bulkassigngroup', 'mod_confprogram'), 4);
+    echo $OUTPUT->heading(get_string('bulkassigngroup', 'mod_confprogram'), $headinglevel + 1);
     $groupoptions = [0 => get_string('selectgroup', 'mod_confprogram')];
     foreach ($coursegroups as $group) {
         $groupoptions[$group->id] = format_string($group->name);

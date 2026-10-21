@@ -78,7 +78,6 @@ $decisionsreturnurl = new moodle_url('/mod/confprogram/decisions.php', $returnur
 // Review-phase-only screen: block state-changing actions here too, not just rendering.
 if ($confprogram->phase !== 'review') {
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
     echo $OUTPUT->notification(get_string('notinreviewphase', 'mod_confprogram'), 'info');
     echo $OUTPUT->footer();
     exit;
@@ -139,9 +138,9 @@ if (data_submitted()) {
     redirect($decisionsreturnurl);
 }
 
+// The activity name is already shown by core's page/activity header (see view.php).
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(get_string('decisionreport', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('decisionreport', 'mod_confprogram'), $PAGE->activityheader->get_heading_level());
 
 // Independent of any track/status filter below -- this is a call to action
 // to go do a DIFFERENT task on assign.php, so it must reflect the true,

@@ -70,9 +70,9 @@ if (data_submitted()) {
 
 $settings = field_settings::get_settings_with_defaults((int) $confprogram->id, $availablefields);
 
+// The activity name is already shown by core's page/activity header (see view.php).
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(get_string('displaysettings', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('displaysettings', 'mod_confprogram'), $PAGE->activityheader->get_heading_level());
 
 echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out_omit_querystring()]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);

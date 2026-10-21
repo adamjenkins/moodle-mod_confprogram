@@ -69,8 +69,8 @@ $PAGE->set_title(format_string($confprogram->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+// The activity name is already shown by core's page/activity header (see view.php).
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
 
 if ($confprogram->phase !== 'review') {
     echo $OUTPUT->notification(get_string('notinreviewphase', 'mod_confprogram'), 'info');
@@ -78,7 +78,8 @@ if ($confprogram->phase !== 'review') {
     exit;
 }
 
-echo $OUTPUT->heading(get_string('myfeedback', 'mod_confprogram', format_string($submission->title)), 3);
+$headinglevel = $PAGE->activityheader->get_heading_level();
+echo $OUTPUT->heading(get_string('myfeedback', 'mod_confprogram', format_string($submission->title)), $headinglevel);
 
 // A submission can in principle be flagged unvetted after a resubmit decision was already
 // recorded (e.g. converted to an invited panel post-review); re-check here so that edge case

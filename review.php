@@ -59,6 +59,10 @@ $PAGE->set_title(format_string($confprogram->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+// The activity name is already shown by core's page/activity header (see view.php), so
+// this page's own headings start at the level that header leaves free.
+$headinglevel = $PAGE->activityheader->get_heading_level();
+
 $confsubmissionscm = get_coursemodule_from_id('confsubmissions', $confprogram->confsubmissionscmid, 0, false, MUST_EXIST);
 
 // Submissions flagged unvetted are excluded from the review workflow entirely.
@@ -72,7 +76,6 @@ if (!$submissionid) {
     // normally (this branch's own header()/footer() calls are unaffected by the fix
     // below, which only concerns single-submission mode further down).
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
 
     if ($confprogram->phase !== 'review') {
         echo $OUTPUT->notification(get_string('notinreviewphase', 'mod_confprogram'), 'info');
@@ -80,7 +83,7 @@ if (!$submissionid) {
         exit;
     }
 
-    echo $OUTPUT->heading(get_string('myreviewqueue', 'mod_confprogram'), 3);
+    echo $OUTPUT->heading(get_string('myreviewqueue', 'mod_confprogram'), $headinglevel);
 
     $assignedids = api::get_assigned_submission_ids_for_user((int) $confprogram->id, (int) $USER->id);
 
@@ -109,7 +112,7 @@ if (!$submissionid) {
         }
     }
 
-    echo $OUTPUT->heading(get_string('pendingreviews', 'mod_confprogram'), 4);
+    echo $OUTPUT->heading(get_string('pendingreviews', 'mod_confprogram'), $headinglevel + 1);
     if ($pending) {
         $table = new html_table();
         $table->head = [
@@ -131,7 +134,7 @@ if (!$submissionid) {
         echo $OUTPUT->notification(get_string('noreviewspending', 'mod_confprogram'), 'info');
     }
 
-    echo $OUTPUT->heading(get_string('completedreviews', 'mod_confprogram'), 4);
+    echo $OUTPUT->heading(get_string('completedreviews', 'mod_confprogram'), $headinglevel + 1);
     if ($completed) {
         $table = new html_table();
         $table->head = [
@@ -169,7 +172,6 @@ if (!$submissionid) {
 
 if ($confprogram->phase !== 'review') {
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
     echo $OUTPUT->notification(get_string('notinreviewphase', 'mod_confprogram'), 'info');
     echo $OUTPUT->footer();
     exit;
@@ -194,7 +196,6 @@ if (!api::is_user_assigned((int) $confprogram->id, $submissionid, (int) $USER->i
 // check now that we know the caller is genuinely assigned to this submission.
 if (in_array($submissionid, $unvettedids, true)) {
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
     echo $OUTPUT->notification(get_string('error:unvetted', 'mod_confprogram'), 'error');
     echo $OUTPUT->footer();
     exit;
@@ -207,7 +208,6 @@ $existingreview = api::get_review((int) $confprogram->id, $submissionid, (int) $
 // reviewer has already completed for this exact submission+round is never blocked.
 if (!$existingreview && !reviewer_workload::has_capacity((int) $confprogram->id, (int) $USER->id, $round)) {
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
     echo $OUTPUT->notification(get_string('error:reviewcapreached', 'mod_confprogram'), 'error');
     echo $OUTPUT->footer();
     exit;
@@ -311,8 +311,7 @@ if ($mform->is_cancelled()) {
 $canviewidentity = identity::can_view_identity($context);
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(format_string($submission->title), 3);
+echo $OUTPUT->heading(format_string($submission->title), $headinglevel);
 
 // Speaker identity is only fetched at all when the viewer is allowed to see it (defence in
 // depth against a stray debug/log statement leaking it while blinded).
@@ -370,7 +369,7 @@ if ($canviewidentity) {
     echo $OUTPUT->notification(get_string('fieldshidden', 'mod_confprogram'), 'info');
 }
 
-echo $OUTPUT->heading(get_string('review', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('review', 'mod_confprogram'), $headinglevel);
 
 if ($noreviewformnotice !== null) {
     echo $OUTPUT->notification($noreviewformnotice, 'warning');

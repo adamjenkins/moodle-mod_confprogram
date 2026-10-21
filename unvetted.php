@@ -66,7 +66,6 @@ $getownsubmission = function (int $submissionid) use ($confsubmissionscm): ?\std
 // Review-phase-only screen: block state-changing actions here too, not just rendering.
 if ($confprogram->phase !== 'review') {
     echo $OUTPUT->header();
-    echo $OUTPUT->heading(format_string($confprogram->name), 2);
     echo $OUTPUT->notification(get_string('notinreviewphase', 'mod_confprogram'), 'info');
     echo $OUTPUT->footer();
     exit;
@@ -89,9 +88,9 @@ if (data_submitted()) {
     }
 }
 
+// The activity name is already shown by core's page/activity header (see view.php).
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
-echo $OUTPUT->heading(get_string('unvettedsubmissions', 'mod_confprogram'), 3);
+echo $OUTPUT->heading(get_string('unvettedsubmissions', 'mod_confprogram'), $PAGE->activityheader->get_heading_level());
 echo html_writer::tag('p', get_string('unvettedsubmissions_help', 'mod_confprogram'));
 
 $submissions = submissions_api::get_submissions_for_instance($confsubmissionscm->instance);

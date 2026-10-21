@@ -118,8 +118,23 @@ if (data_submitted() && optional_param('togglephase', 0, PARAM_BOOL)) {
 
 $confsubmissionscm = get_coursemodule_from_id('confsubmissions', $confprogram->confsubmissionscmid, 0, false, MUST_EXIST);
 
+// The activity name and description are already shown by core (Boost's page header and
+// the activity header, \core\output\activity_header), so this page prints neither itself:
+// same as core's mod_page/mod_forum/mod_assign view.php. Our own section headings take
+// the level core's activity header leaves free below it (2, or 3 when the theme also
+// prints the activity title as an h2).
+$headinglevel = $PAGE->activityheader->get_heading_level();
+
+// The activity header shows the intro unless the page layout suppresses it (no activity
+// header at all, 'nodescription', or 'nocompletion', since activity_header only renders
+// the description inside its completion/activity-info block), so print it ourselves only
+// then, the way mod_page does for its popup layout.
+$activityheaderoptions = $PAGE->layout_options['activityheader'] ?? [];
+$headershowsintro = empty($PAGE->layout_options['noactivityheader'])
+    && empty($activityheaderoptions['nodescription'])
+    && empty($activityheaderoptions['nocompletion']);
+
 echo $OUTPUT->header();
-echo $OUTPUT->heading(format_string($confprogram->name), 2);
 
 if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers', $context)) {
     $nextphase = $confprogram->phase === 'review' ? 'display' : 'review';
@@ -203,7 +218,7 @@ if ($PAGE->user_is_editing() && has_capability('mod/confprogram:managereviewers'
     echo html_writer::end_tag('div');
 }
 
-if (!empty($confprogram->intro)) {
+if (!$headershowsintro && trim((string) $confprogram->intro) !== '') {
     echo $OUTPUT->box(format_module_intro('confprogram', $confprogram, $cm->id), 'generalbox', 'intro');
 }
 
@@ -252,7 +267,7 @@ if ($confprogram->phase === 'review') {
         }
     }
     if ($resubmitlinks) {
-        echo $OUTPUT->heading(get_string('resubmissionsneeded', 'mod_confprogram'), 4);
+        echo $OUTPUT->heading(get_string('resubmissionsneeded', 'mod_confprogram'), $headinglevel);
         echo html_writer::alist($resubmitlinks);
     }
 
@@ -276,9 +291,9 @@ if ($confprogram->phase === 'review') {
         }
     }
     if ($reviewsections) {
-        echo $OUTPUT->heading(get_string('myreviews', 'mod_confprogram'), 4);
+        echo $OUTPUT->heading(get_string('myreviews', 'mod_confprogram'), $headinglevel);
         foreach ($reviewsections as $reviewsection) {
-            echo $OUTPUT->heading(format_string($reviewsection['submission']->title), 5);
+            echo $OUTPUT->heading(format_string($reviewsection['submission']->title), $headinglevel + 1);
             echo review_display::render($context, $reviewsection['reviews']);
         }
     }
@@ -343,7 +358,7 @@ if ($confprogram->phase === 'review') {
         ));
     }
 
-    echo $OUTPUT->heading(get_string('acceptedsubmissions', 'mod_confprogram'), 3);
+    echo $OUTPUT->heading(get_string('acceptedsubmissions', 'mod_confprogram'), $headinglevel);
 
     if ($trackid) {
         $clearfilterurl = new moodle_url(
@@ -424,7 +439,11 @@ if ($confprogram->phase === 'review') {
         'track'     => 'minmax(6rem, auto)',
         'field'     => 'minmax(7rem, 1fr)',
         'schedule'  => 'minmax(11rem, auto)',
-        'favourite' => '3.25rem',
+        // Content-sized, not a fixed 3.25rem: a fixed width narrower than the "Favourite"
+        // header word made styles.css's overflow-wrap: break-word split it mid-word
+        // ("Favo" / "urite"). An auto track's minimum is the min-content width, which
+        // break-word does not reduce, so the header word always fits on one line.
+        'favourite' => 'auto',
     ];
     $gridtemplate = implode(' ', array_map(fn($role) => $colwidths[$role], $colroles));
 
