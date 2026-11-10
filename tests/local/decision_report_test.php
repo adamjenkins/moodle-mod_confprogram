@@ -376,4 +376,98 @@ final class decision_report_test extends advanced_testcase {
         $this->assertSame(0, $count);
         $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $submission->id));
     }
+
+    /**
+     * An unvetted submission CAN be accepted through the single-row handler (it skips
+     * review, not the decision), which is what lets an invited keynote reach the programme.
+     */
+    public function test_apply_single_decision_accepts_unvetted(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $unvetted = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $saved = decision_report::apply_single_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            (int) $unvetted->id,
+            'accept',
+            [$unvetted->id],
+            (int) $decider->id
+        );
+
+        $this->assertTrue($saved);
+        $latest = rounds::get_latest_decision($confprogramid, (int) $unvetted->id);
+        $this->assertNotNull($latest);
+        $this->assertSame('accept', $latest->decision);
+        $this->assertSame('accept', api::get_decision((int) $unvetted->id)->decision);
+    }
+
+    /**
+     * Resubmit is refused for an unvetted submission (it would ask for a review round the
+     * submission is exempt from), but still allowed for a vetted one.
+     */
+    public function test_apply_single_decision_refuses_resubmit_for_unvetted(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        $unvetted = $this->create_submission($confsubmissionsid);
+        $vetted = $this->create_submission($confsubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $this->assertFalse(decision_report::apply_single_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            (int) $unvetted->id,
+            'resubmit',
+            [$unvetted->id],
+            (int) $decider->id
+        ));
+        $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $unvetted->id));
+
+        $this->assertTrue(decision_report::apply_single_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            (int) $vetted->id,
+            'resubmit',
+            [$unvetted->id],
+            (int) $decider->id
+        ));
+        $this->assertSame('resubmit', rounds::get_latest_decision($confprogramid, (int) $vetted->id)->decision);
+    }
+
+    /**
+     * The single-row handler refuses a submission from another confsubmissions instance
+     * and an invalid decision string.
+     */
+    public function test_apply_single_decision_rejects_cross_instance_and_invalid_decision(): void {
+        $this->resetAfterTest();
+
+        [$confprogramid, $confsubmissionsid] = $this->create_confprogram();
+        [, $othersubmissionsid] = $this->create_confprogram();
+        $own = $this->create_submission($confsubmissionsid);
+        $other = $this->create_submission($othersubmissionsid);
+        $decider = $this->getDataGenerator()->create_user();
+
+        $this->assertFalse(decision_report::apply_single_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            (int) $other->id,
+            'accept',
+            [],
+            (int) $decider->id
+        ));
+        $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $other->id));
+
+        $this->assertFalse(decision_report::apply_single_decision(
+            $confprogramid,
+            $confsubmissionsid,
+            (int) $own->id,
+            'not-a-real-decision',
+            [],
+            (int) $decider->id
+        ));
+        $this->assertNull(rounds::get_latest_decision($confprogramid, (int) $own->id));
+    }
 }

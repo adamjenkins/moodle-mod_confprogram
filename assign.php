@@ -213,13 +213,15 @@ if ($focus) {
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 
 $table = new html_table();
-$head = [
-    $confprogram->groupreviewmode ? get_string('select') : '',
+// The select column only exists in group-review mode (it feeds the bulk group assignment
+// below); without it there would be an empty column with a blank header.
+$head = $confprogram->groupreviewmode ? [get_string('select')] : [];
+$head = array_merge($head, [
     get_string('title', 'mod_confsubmissions'),
     get_string('track', 'mod_confsubmissions'),
     get_string('currentreviewers', 'mod_confprogram'),
     get_string('assignreviewer', 'mod_confprogram'),
-];
+]);
 $table->head = $head;
 $table->attributes['class'] = 'generaltable';
 
@@ -263,17 +265,16 @@ foreach ($submissions as $submission) {
             'class' => 'btn btn-secondary btn-sm',
         ]);
 
-    $checkbox = $confprogram->groupreviewmode
-        ? html_writer::checkbox('submissionids[]', $submission->id, false, '', ['class' => 'mr-1'])
-        : '';
+    $row = $confprogram->groupreviewmode
+        ? [html_writer::checkbox('submissionids[]', $submission->id, false, '', ['class' => 'mr-1'])]
+        : [];
 
-    $table->data[] = [
-        $checkbox,
+    $table->data[] = array_merge($row, [
         format_string($submission->title),
         field_formatter::get_track_pill_html($submission),
         $currentcell,
         $assigncell,
-    ];
+    ]);
 }
 
 echo html_writer::table($table);

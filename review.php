@@ -33,6 +33,7 @@ require_once($CFG->dirroot . '/grade/grading/lib.php');
 use mod_confprogram\api;
 use mod_confprogram\form\review_form;
 use mod_confprogram\local\field_formatter;
+use mod_confprogram\local\field_settings;
 use mod_confprogram\local\identity;
 use mod_confprogram\local\reviewer_workload;
 use mod_confprogram\local\rounds;
@@ -356,10 +357,14 @@ echo html_writer::tag('div', format_text($submission->abstract, FORMAT_PLAIN), [
 // (e.g. an "Author bio" free-text field) could be identifying, and there is no way
 // to tell which ones safely aren't. Fetched only when visible, same
 // fetch-gated defence-in-depth as the Speakers block.
+//
+// Values go through field_formatter::format_value(), the formatter the Display-phase list
+// and modal use, so a checkbox reads Yes/No and a date reads as a date instead of the stored
+// '1'/'0' or timestamp. It returns plain text, which s() escapes below.
 if ($canviewidentity) {
-    $fieldvalues = submissions_api::get_optional_field_values($submissionid);
+    field_formatter::preload_for_submissions([$submission]);
     foreach (submissions_api::get_fields($confsubmissionscm->instance) as $field) {
-        $value = $fieldvalues[$field->id] ?? '';
+        $value = field_formatter::format_value(field_settings::OPTIONAL_FIELD_PREFIX . $field->id, $submission);
         if ($value === '') {
             continue;
         }

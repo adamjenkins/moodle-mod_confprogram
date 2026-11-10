@@ -97,8 +97,9 @@ final class decision_report {
 
     /**
      * Records the same decision for every valid submission in a batch,
-     * re-verifying instance membership and unvetted-exclusion per id exactly
-     * like the single-row handler in decisions.php already does. An invalid
+     * re-verifying instance membership and unvetted-exclusion per id. Unvetted
+     * ids are skipped because the bulk toolbar belongs to the reviewed-submissions
+     * table; they get their decision through apply_single_decision(). An invalid
      * id in the batch is silently skipped, not an error -- a stale or crafted
      * id must never abort the whole batch or leak which ids were valid,
      * mirroring assign.php's existing assigngroup bulk handler.
@@ -145,5 +146,47 @@ final class decision_report {
         }
 
         return $count;
+    }
+
+    /**
+     * Records one decision for one submission: decisions.php's per-row "Save decision"
+     * handler. Unlike apply_bulk_decision(), unvetted submissions are NOT excluded: they
+     * skip peer review, not the decision, and an organiser accepts an invited keynote or
+     * panel here so that the Display list and Conference Scheduler (which both require an
+     * 'accept' decision) pick it up. Resubmit is refused for an unvetted submission, since
+     * it asks for another review round the submission is exempt from. Instance membership
+     * is still re-verified, so a crafted id from another course is refused.
+     *
+     * @param int $confprogramid The confprogram instance id
+     * @param int $confsubmissionsinstanceid The confsubmissions instance this confprogram vets
+     * @param int $submissionid The submission to decide (untrusted)
+     * @param string $decision One of accept/reject/resubmit/waitlist
+     * @param array $unvettedids submissionids flagged unvetted in this instance
+     * @param int $userid The user recording the decision
+     * @return bool Whether a decision was recorded
+     */
+    public static function apply_single_decision(
+        int $confprogramid,
+        int $confsubmissionsinstanceid,
+        int $submissionid,
+        string $decision,
+        array $unvettedids,
+        int $userid
+    ): bool {
+        if (!in_array($decision, ['accept', 'reject', 'resubmit', 'waitlist'], true)) {
+            return false;
+        }
+        if ($decision === 'resubmit' && in_array($submissionid, array_map('intval', $unvettedids), true)) {
+            return false;
+        }
+
+        $submission = submissions_api::get_submission($submissionid);
+        if (!$submission || (int) $submission->confsubmissions !== $confsubmissionsinstanceid) {
+            return false;
+        }
+
+        $round = rounds::get_current_round($confprogramid, $submissionid);
+        api::record_decision($confprogramid, $submissionid, $decision, $round, $userid);
+        return true;
     }
 }

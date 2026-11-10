@@ -56,7 +56,8 @@ class review_form extends \moodleform {
             $mform->addElement(
                 'grading',
                 'advancedgrading',
-                get_string('review', 'mod_confprogram'),
+                // Not 'review': review.php already prints a "Review" heading right above the form.
+                get_string('reviewscoring', 'mod_confprogram'),
                 ['gradinginstance' => $gradinginstance]
             );
             $mform->addElement('hidden', 'advancedgradinginstanceid', $gradinginstance->get_id());

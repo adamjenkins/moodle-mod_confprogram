@@ -42,9 +42,11 @@ final class review_page_test extends advanced_testcase {
      * field value, and a reviewer assigned to it. Returns everything a test
      * needs to render review.php as that reviewer.
      *
-     * @return array{cm: \stdClass, submissionid: int, reviewer: \stdClass, speaker: \stdClass, fieldvalue: string}
+     * @param int $blindreview The instance's blindreview setting
+     * @return array{cm: \stdClass, submissionid: int, reviewer: \stdClass, speaker: \stdClass, fieldvalue: string,
+     *     confsubmissionsid: int}
      */
-    private function setup_scenario(): array {
+    private function setup_scenario(int $blindreview = 1): array {
         global $DB;
 
         $course = $this->getDataGenerator()->create_course();
@@ -54,7 +56,7 @@ final class review_page_test extends advanced_testcase {
         $confprogram = $this->getDataGenerator()->create_module('confprogram', [
             'course'              => $course->id,
             'confsubmissionscmid' => $confsubmissionscm->id,
-            'blindreview'         => 1,
+            'blindreview'         => $blindreview,
             'phase'               => 'review',
         ]);
         $cm = get_coursemodule_from_instance('confprogram', $confprogram->id);
@@ -97,6 +99,7 @@ final class review_page_test extends advanced_testcase {
             'reviewer'     => $reviewer,
             'speaker'      => $speaker,
             'fieldvalue'   => 'Secretly identifying biography text',
+            'confsubmissionsid' => (int) $confsubmissions->id,
         ];
     }
 
@@ -123,6 +126,8 @@ final class review_page_test extends advanced_testcase {
         // review.php calls $PAGE->set_url()/set_context() etc. on the shared global.
         $PAGE = new \moodle_page();
         $OUTPUT = new \core_renderer($PAGE, RENDERER_TARGET_GENERAL);
+        // The formatter's caches are request-scoped; a new "request" starts with them empty.
+        \mod_confprogram\local\field_formatter::reset_caches();
 
         // Review.php requires '../../config.php' relative to its own directory, not
         // via __DIR__ -- chdir() there first so that resolves the same way a real
@@ -180,6 +185,43 @@ final class review_page_test extends advanced_testcase {
 
         $this->assertStringContainsString(fullname($scenario['speaker']), $html);
         $this->assertStringContainsString('Author bio', $html);
+        $this->assertStringContainsString($scenario['fieldvalue'], $html);
+    }
+
+    /**
+     * With blind review off, checkbox and date answers are shown formatted by field type
+     * (Yes/No and a date), not as the stored '1' or timestamp.
+     */
+    public function test_custom_field_values_are_formatted_by_type(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $scenario = $this->setup_scenario(0);
+        $confsubmissionsid = $scenario['confsubmissionsid'];
+        $checkboxid = \mod_confsubmissions\api::add_field($confsubmissionsid, 'Needs a projector', 'checkbox', null, false);
+        $dateid = \mod_confsubmissions\api::add_field($confsubmissionsid, 'Available from', 'date', null, false);
+        $timestamp = make_timestamp(2026, 11, 14);
+        $DB->insert_record('confsubmissions_fieldval', (object) [
+            'submissionid' => $scenario['submissionid'],
+            'fieldid'      => $checkboxid,
+            'value'        => '1',
+        ]);
+        $DB->insert_record('confsubmissions_fieldval', (object) [
+            'submissionid' => $scenario['submissionid'],
+            'fieldid'      => $dateid,
+            'value'        => (string) $timestamp,
+        ]);
+        $this->setUser($scenario['reviewer']);
+
+        $html = $this->render_review_page($scenario['cm'], $scenario['submissionid']);
+
+        $this->assertStringContainsString('<strong>Needs a projector: </strong>' . get_string('yes'), $html);
+        $this->assertStringContainsString(
+            '<strong>Available from: </strong>' . s(userdate($timestamp, get_string('strftimedate'))),
+            $html
+        );
+        $this->assertStringNotContainsString((string) $timestamp, $html);
+        // A text field still shows as entered.
         $this->assertStringContainsString($scenario['fieldvalue'], $html);
     }
 }

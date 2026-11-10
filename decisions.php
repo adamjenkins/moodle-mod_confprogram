@@ -18,7 +18,9 @@
  * Decision report for mod_confprogram: a filterable table of non-unvetted
  * submissions with their current round's completed reviews, letting an
  * editing role record an Accept/Reject/Resubmit/Waitlist call individually
- * or in bulk across a checked selection.
+ * or in bulk across a checked selection. Unvetted submissions (exempt from
+ * review) follow in a separate table of their own, where an organiser records
+ * their decision (typically Accept) one row at a time.
  *
  * See \mod_confprogram\local\rounds for the round-derivation rules this page
  * relies on. In short: a submission whose most recent decision is 'resubmit'
@@ -36,11 +38,9 @@
 require_once('../../config.php');
 require_once($CFG->dirroot . '/mod/confprogram/lib.php');
 
-use mod_confprogram\api;
 use mod_confprogram\local\decision_report;
 use mod_confprogram\local\field_formatter;
 use mod_confprogram\local\identity;
-use mod_confprogram\local\rounds;
 use mod_confsubmissions\api as submissions_api;
 
 $id = required_param('id', PARAM_INT);
@@ -118,21 +118,26 @@ if (data_submitted()) {
 
     $decidesubmissionid = optional_param('decidesubmissionid', 0, PARAM_INT);
 
-    if ($decidesubmissionid && !in_array($decidesubmissionid, $unvettedids, true)) {
+    // Unvetted submissions are allowed here (they skip review, not the decision): the
+    // "Unvetted submissions" table below posts to this same handler. Resubmit is refused
+    // for them, since it asks for another review round they are exempt from.
+    if ($decidesubmissionid) {
         $decision = optional_param('decision_' . $decidesubmissionid, '', PARAM_ALPHA);
-
-        if (in_array($decision, $validdecisions, true)) {
-            $decidesubmission = submissions_api::get_submission($decidesubmissionid);
-            if ($decidesubmission && (int) $decidesubmission->confsubmissions === (int) $confsubmissionscm->instance) {
-                $round = rounds::get_current_round((int) $confprogram->id, $decidesubmissionid);
-                api::record_decision((int) $confprogram->id, $decidesubmissionid, $decision, $round, (int) $USER->id);
-                redirect(
-                    $decisionsreturnurl,
-                    get_string('decisionsaved', 'mod_confprogram'),
-                    null,
-                    \core\output\notification::NOTIFY_SUCCESS
-                );
-            }
+        $saved = decision_report::apply_single_decision(
+            (int) $confprogram->id,
+            (int) $confsubmissionscm->instance,
+            $decidesubmissionid,
+            $decision,
+            $unvettedids,
+            (int) $USER->id
+        );
+        if ($saved) {
+            redirect(
+                $decisionsreturnurl,
+                get_string('decisionsaved', 'mod_confprogram'),
+                null,
+                \core\output\notification::NOTIFY_SUCCESS
+            );
         }
     }
     redirect($decisionsreturnurl);
@@ -195,14 +200,20 @@ if ($filtertrack) {
     $filters['trackid'] = $filtertrack;
 }
 $submissions = submissions_api::get_submissions_for_instance($confsubmissionscm->instance, $filters);
+$unvettedsubmissions = [];
 foreach ($unvettedids as $uid) {
+    if (isset($submissions[$uid])) {
+        $unvettedsubmissions[$uid] = $submissions[$uid];
+    }
     unset($submissions[$uid]);
 }
 
 $decorated = decision_report::decorate_submissions((int) $confprogram->id, $submissions);
 $decorated = decision_report::filter_by_decision_status($decorated, $filterstatus);
+$decoratedunvetted = decision_report::decorate_submissions((int) $confprogram->id, $unvettedsubmissions);
+$decoratedunvetted = decision_report::filter_by_decision_status($decoratedunvetted, $filterstatus);
 
-if (!$decorated) {
+if (!$decorated && !$decoratedunvetted) {
     echo $OUTPUT->notification(get_string('nosubmissionsfound', 'mod_confsubmissions'), 'info');
     echo $OUTPUT->footer();
     exit;
@@ -217,77 +228,20 @@ foreach ($validdecisions as $decision) {
     $decisionoptions[$decision] = get_string('decision_' . $decision, 'mod_confprogram');
 }
 
-echo html_writer::start_tag('form', [
-    'method' => 'post',
-    'action' => $pageurl->out_omit_querystring(),
-    'id'     => 'mod_confprogram-decisions-form',
-]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-
-echo html_writer::start_tag('div', ['class' => 'mod_confprogram-bulk-toolbar form-inline mb-3']);
-echo html_writer::label(get_string('makedecision', 'mod_confprogram'), 'menubulkdecision', false, ['class' => 'sr-only']);
-echo html_writer::select(
-    $decisionoptions,
-    'bulkdecision',
-    '',
-    ['' => get_string('makedecision', 'mod_confprogram')],
-    ['class' => 'mr-2']
-);
-echo html_writer::tag('button', get_string('applybulkdecision', 'mod_confprogram'), [
-    'type'  => 'submit',
-    'name'  => 'applybulkdecision',
-    'value' => 1,
-    'class' => 'btn btn-primary mod_confprogram-apply-bulk-decision',
-]);
-echo html_writer::end_tag('div');
-
-$table = new html_table();
-$table->head = [
-    html_writer::empty_tag('input', [
-        'type'       => 'checkbox',
-        'class'      => 'mod_confprogram-select-all',
-        'aria-label' => get_string('selectall', 'mod_confprogram'),
-    ]),
-    get_string('title', 'mod_confsubmissions'),
-    get_string('track', 'mod_confsubmissions'),
-    get_string('round', 'mod_confprogram'),
-    get_string('lastdecisioncolumn', 'mod_confprogram'),
-    get_string('reviews', 'mod_confprogram'),
-    get_string('makedecision', 'mod_confprogram'),
-];
-$table->attributes['class'] = 'generaltable';
-
-foreach ($decorated as $row) {
-    $submission = $row->submission;
-
-    $decisioncell = $row->latestdecision
+// Per-row cells shared by the main table and the unvetted table below.
+$decisioncellfor = static function (?\stdClass $latestdecision): string {
+    return $latestdecision
         ? get_string('lastdecision', 'mod_confprogram', [
-            'decision' => get_string('decision_' . $row->latestdecision->decision, 'mod_confprogram'),
-            'round'    => $row->latestdecision->round,
+            'decision' => get_string('decision_' . $latestdecision->decision, 'mod_confprogram'),
+            'round'    => $latestdecision->round,
         ])
         : get_string('nodecisionyet', 'mod_confprogram');
-
-    if ($row->reviews) {
-        $lines = [];
-        $anonymousindex = 1;
-        foreach ($row->reviews as $review) {
-            if ($canviewidentity) {
-                $reviewer = \core_user::get_user($review->reviewerid);
-                $reviewerlabel = $reviewer ? fullname($reviewer) : '-';
-            } else {
-                $reviewerlabel = get_string('anonymousreviewer', 'mod_confprogram', $anonymousindex);
-                $anonymousindex++;
-            }
-            $lines[] = s($reviewerlabel) . ': ' . ($review->grade !== null ? format_float($review->grade, 2) : '-');
-        }
-        $reviewscell = implode(html_writer::empty_tag('br'), $lines);
-    } else {
-        $reviewscell = get_string('noreviewsyet', 'mod_confprogram');
-    }
-
-    $decisioncontrolcell = html_writer::select(
-        $decisionoptions,
+};
+// Unvetted rows get no Resubmit option: it asks for another review round they are exempt from.
+$unvetteddecisionoptions = array_diff_key($decisionoptions, ['resubmit' => true]);
+$decisioncontrolfor = static function (\stdClass $submission, array $options): string {
+    return html_writer::select(
+        $options,
         'decision_' . $submission->id,
         '',
         ['' => get_string('makedecision', 'mod_confprogram')],
@@ -303,7 +257,12 @@ foreach ($decorated as $row) {
         'value' => $submission->id,
         'class' => 'btn btn-primary btn-sm',
     ]);
-
+};
+$titlecellfor = static function (\stdClass $submission) use (
+    $caneditsubmissions,
+    $confsubmissionscm,
+    $decisionsreturnurl
+): string {
     $titlecell = format_string($submission->title);
     if ($caneditsubmissions) {
         $editurl = new moodle_url('/mod/confsubmissions/edit.php', [
@@ -316,22 +275,126 @@ foreach ($decorated as $row) {
             'aria-label' => get_string('editsubmissionlink', 'mod_confprogram', format_string($submission->title)),
         ]);
     }
+    return $titlecell;
+};
 
-    $table->data[] = [
-        html_writer::checkbox('submissionids[]', $submission->id, false, '', [
-            'class'      => 'mod_confprogram-row-checkbox',
-            'aria-label' => get_string('selectsubmission', 'mod_confprogram', format_string($submission->title)),
+if ($decorated) {
+    echo html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => $pageurl->out_omit_querystring(),
+        'id'     => 'mod_confprogram-decisions-form',
+    ]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+
+    echo html_writer::start_tag('div', ['class' => 'mod_confprogram-bulk-toolbar form-inline mb-3']);
+    echo html_writer::label(get_string('makedecision', 'mod_confprogram'), 'menubulkdecision', false, ['class' => 'sr-only']);
+    echo html_writer::select(
+        $decisionoptions,
+        'bulkdecision',
+        '',
+        ['' => get_string('makedecision', 'mod_confprogram')],
+        ['class' => 'mr-2']
+    );
+    echo html_writer::tag('button', get_string('applybulkdecision', 'mod_confprogram'), [
+        'type'  => 'submit',
+        'name'  => 'applybulkdecision',
+        'value' => 1,
+        'class' => 'btn btn-primary mod_confprogram-apply-bulk-decision',
+    ]);
+    echo html_writer::end_tag('div');
+
+    $table = new html_table();
+    $table->head = [
+        html_writer::empty_tag('input', [
+            'type'       => 'checkbox',
+            'class'      => 'mod_confprogram-select-all',
+            'aria-label' => get_string('selectall', 'mod_confprogram'),
         ]),
-        $titlecell,
-        field_formatter::get_track_pill_html($submission),
-        $row->round,
-        $decisioncell,
-        $reviewscell,
-        $decisioncontrolcell,
+        get_string('title', 'mod_confsubmissions'),
+        get_string('track', 'mod_confsubmissions'),
+        get_string('round', 'mod_confprogram'),
+        get_string('lastdecisioncolumn', 'mod_confprogram'),
+        get_string('reviews', 'mod_confprogram'),
+        get_string('makedecision', 'mod_confprogram'),
     ];
+    $table->attributes['class'] = 'generaltable';
+
+    foreach ($decorated as $row) {
+        $submission = $row->submission;
+
+        if ($row->reviews) {
+            $lines = [];
+            $anonymousindex = 1;
+            foreach ($row->reviews as $review) {
+                if ($canviewidentity) {
+                    $reviewer = \core_user::get_user($review->reviewerid);
+                    $reviewerlabel = $reviewer ? fullname($reviewer) : '-';
+                } else {
+                    $reviewerlabel = get_string('anonymousreviewer', 'mod_confprogram', $anonymousindex);
+                    $anonymousindex++;
+                }
+                $lines[] = s($reviewerlabel) . ': ' . ($review->grade !== null ? format_float($review->grade, 2) : '-');
+            }
+            $reviewscell = implode(html_writer::empty_tag('br'), $lines);
+        } else {
+            $reviewscell = get_string('noreviewsyet', 'mod_confprogram');
+        }
+
+        $table->data[] = [
+            html_writer::checkbox('submissionids[]', $submission->id, false, '', [
+                'class'      => 'mod_confprogram-row-checkbox',
+                'aria-label' => get_string('selectsubmission', 'mod_confprogram', format_string($submission->title)),
+            ]),
+            $titlecellfor($submission),
+            field_formatter::get_track_pill_html($submission),
+            $row->round,
+            $decisioncellfor($row->latestdecision),
+            $reviewscell,
+            $decisioncontrolfor($submission, $decisionoptions),
+        ];
+    }
+
+    echo html_writer::table($table);
+    echo html_writer::end_tag('form');
 }
 
-echo html_writer::table($table);
-echo html_writer::end_tag('form');
+// Unvetted submissions skip peer review but still need a decision (typically Accept) before
+// the Display list or Conference Scheduler will show them. Their own form: no bulk toolbar,
+// no review columns; the per-row button posts to the same decidesubmissionid handler.
+if ($decoratedunvetted) {
+    echo $OUTPUT->heading(
+        get_string('unvettedsubmissions', 'mod_confprogram'),
+        $PAGE->activityheader->get_heading_level() + 1
+    );
+    echo html_writer::tag('p', get_string('unvetteddecisions_desc', 'mod_confprogram'));
+
+    echo html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => $pageurl->out_omit_querystring(),
+        'id'     => 'mod_confprogram-unvetted-decisions-form',
+    ]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+
+    $unvettedtable = new html_table();
+    $unvettedtable->head = [
+        get_string('title', 'mod_confsubmissions'),
+        get_string('track', 'mod_confsubmissions'),
+        get_string('lastdecisioncolumn', 'mod_confprogram'),
+        get_string('makedecision', 'mod_confprogram'),
+    ];
+    $unvettedtable->attributes['class'] = 'generaltable';
+    foreach ($decoratedunvetted as $row) {
+        $unvettedtable->data[] = [
+            $titlecellfor($row->submission),
+            field_formatter::get_track_pill_html($row->submission),
+            $decisioncellfor($row->latestdecision),
+            $decisioncontrolfor($row->submission, $unvetteddecisionoptions),
+        ];
+    }
+    echo html_writer::table($unvettedtable);
+    echo html_writer::end_tag('form');
+}
 
 echo $OUTPUT->footer();
