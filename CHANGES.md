@@ -1,15 +1,16 @@
 # Changes
 
-## v0.1.3
+## v0.1.4
 
-- The camp listing now has screenshots with captions and links to the user manuals and the issue
-  tracker.
-- Colours follow the Moodle Design System tokens, falling back to the Bootstrap variables and then
-  the previous colours, so the programme list styles follow Moodle 5.3's dark colour mode while Moodle 5.2 looks
-  unchanged.
-- The programme list's Favourite column header no longer breaks mid-word.
-- Pages no longer repeat the activity name (and, where Moodle's activity header already shows it,
-  the description) under Moodle's own page header; page headings follow the activity header's
-  heading level.
+- Unvetted submissions (such as invited keynotes and panels) can now be given a decision. The
+  Decision report lists them in their own "Unvetted submissions" section, where an organiser
+  records a decision for each one, typically Accept, so that they appear in the programme list
+  and in Conference Scheduler. Resubmit is not offered for them.
+- The review page shows checkbox and date field values as Yes/No and as dates, instead of the
+  raw stored values.
+- The reviewer assignment page no longer shows an empty first column when group review is off.
+- The rubric on the review form is labelled "Scoring" instead of repeating the "Review" heading.
+- Clearer wording for the "Start a new round" link, and the "Default max reviews per reviewer"
+  help no longer mentions a per-reviewer override that cannot be set.
 
 See `changelog.md` for the full development history.

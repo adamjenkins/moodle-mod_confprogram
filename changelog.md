@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.1.4] - 2026-11-10
+
+### Added
+
+- Decision report: unvetted submissions are listed in their own "Unvetted submissions" section
+  (heading plus the new string `unvetteddecisions_desc`) with a per-row decision control and no
+  Resubmit option, in a separate form posting to the same `decidesubmissionid` handler. The
+  status and track filters apply to this section too.
+- `decision_report::apply_single_decision()`: records one decision after re-checking the
+  decision value and the submission's instance; it allows unvetted submissions but refuses
+  Resubmit for them. `decisions.php`'s per-row handler now uses it.
+  `apply_bulk_decision()` still skips unvetted ids.
+- New string `reviewscoring` ("Scoring").
+- New and extended PHPUnit tests for `decision_report` and the review page.
+
+### Changed
+
+- `review_form`: the advanced grading element is labelled with `reviewscoring` instead of
+  `review`.
+- `review.php`: optional field values go through `field_formatter::format_value()` (the formatter
+  the Display list uses), so checkbox fields read Yes/No and date fields read as dates.
+- `assign.php`: the select column is only added in group-review mode, so there is no empty
+  column with a blank header otherwise.
+- Strings: `startnewroundforresubmits` reworded ("Start a new round (submissions awaiting one:
+  {$a})"); `defaultmaxreviews_help` no longer mentions a per-reviewer override that has no UI;
+  `unvettedsubmissions_help` says where unvetted submissions get their decision.
+- README: describes accepting unvetted submissions in the Decision report.
+
+### Fixed
+
+- Unvetted submissions could never be accepted, so they never reached the Display list or
+  Conference Scheduler.
+
 ## [0.1.3] - 2026-10-21
 
 ### Added
