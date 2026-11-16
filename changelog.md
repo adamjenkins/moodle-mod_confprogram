@@ -8,7 +8,14 @@
   tags (or `{mlang}`) shows the reader's language on the review form and in the per-criterion
   feedback table, instead of the raw tags. Core's rubric renderer escapes criterion and level
   text, so `\mod_confprogram\local\rubric_text` filters it to plain text before rendering; the
-  stored rubric is unchanged. Core's own rubric editor and preview page still show the tags.
+  stored rubric is unchanged.
+- The same multilang rubric text shows in the reader's language on core's rubric editor and preview
+  pages for a Conference Program review rubric (`grade/grading/manage.php`,
+  `grade/grading/form/rubric/edit.php`, `preview.php`), with a "multilang" button after it that
+  shows the saved source, one row per language. In the editor only the read-only display of a cell
+  changes; the text box still holds the source. Loaded by a `before_footer_html_generation` hook
+  (`\mod_confprogram\hook_callbacks`, `amd/src/rubric_multilang.js`) and filtered by the new AJAX
+  function `mod_confprogram_format_rubric_text`.
 
 ## [0.1.4] - 2026-11-10
 

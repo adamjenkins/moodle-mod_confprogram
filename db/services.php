@@ -49,4 +49,12 @@ $functions = [
         'ajax'        => true,
         'capabilities' => 'mod/confprogram:managenotifications',
     ],
+    'mod_confprogram_format_rubric_text' => [
+        'classname'   => 'mod_confprogram\external\format_rubric_text',
+        'description' => 'Returns review rubric criterion/level texts as reviewers see them (multilang '
+            . 'filtered to the current language), for core\'s rubric editor and preview pages.',
+        'type'        => 'read',
+        'ajax'        => true,
+        'capabilities' => 'moodle/grade:managegradingforms',
+    ],
 ];
