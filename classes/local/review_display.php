@@ -124,8 +124,8 @@ class review_display {
                             }
                             $leveldef = $criteriondef['levels'][$criteriondata['levelid']] ?? null;
                             $table->data[] = [
-                                format_string($criteriondef['description']),
-                                $leveldef ? format_string($leveldef['definition']) : '-',
+                                s(rubric_text::format((string) $criteriondef['description'], $context)),
+                                $leveldef ? s(rubric_text::format((string) $leveldef['definition'], $context)) : '-',
                                 !empty($criteriondata['remark']) ? format_text($criteriondata['remark'], FORMAT_HTML) : '-',
                             ];
                         }

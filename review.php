@@ -257,6 +257,9 @@ if ($gradingmethod = $gradingmanager->get_active_method()) {
         $instanceid = optional_param('advancedgradinginstanceid', $default, PARAM_INT);
         $controller->set_grade_range(make_grades_menu(100), true);
         $gradinginstance = $controller->get_or_create_instance($instanceid, $USER->id, $reviewitemid);
+        // Core's rubric renderer escapes criterion/level text, so show multilang text in
+        // the reader's language instead of its raw <span> tags.
+        \mod_confprogram\local\rubric_text::localise_definition($controller, $context);
     } else {
         $noreviewformnotice = $controller->form_unavailable_notification();
     }

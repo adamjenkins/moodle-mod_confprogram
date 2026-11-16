@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- A bilingual rubric written with the multilang filter's `<span lang="..." class="multilang">`
+  tags (or `{mlang}`) shows the reader's language on the review form and in the per-criterion
+  feedback table, instead of the raw tags. Core's rubric renderer escapes criterion and level
+  text, so `\mod_confprogram\local\rubric_text` filters it to plain text before rendering; the
+  stored rubric is unchanged. Core's own rubric editor and preview page still show the tags.
+
 ## [0.1.4] - 2026-11-10
 
 ### Added
