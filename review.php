@@ -38,6 +38,7 @@ use mod_confprogram\local\identity;
 use mod_confprogram\local\reviewer_workload;
 use mod_confprogram\local\rounds;
 use mod_confsubmissions\api as submissions_api;
+use mod_confsubmissions\local\limits;
 
 $id = required_param('id', PARAM_INT);
 $submissionid = optional_param('submissionid', 0, PARAM_INT);
@@ -343,7 +344,53 @@ if ($canviewidentity) {
 echo html_writer::tag('p', html_writer::tag('strong', get_string('track', 'mod_confsubmissions') . ': ')
     . field_formatter::get_track_pill_html($submission));
 
-echo html_writer::tag('div', format_text($submission->abstract, FORMAT_PLAIN), ['class' => 'mb-3']);
+// The presentation type (workshop, lightning talk...) is not identifying, so it is shown
+// in a blind review too. The row is left out only when the call has no types and the
+// submission carries none; a type deleted since reads "No presentation type".
+$typename = null;
+if (!empty($submission->submissiontypeid)) {
+    $type = submissions_api::get_submission_type((int) $submission->submissiontypeid);
+    $typename = $type ? format_string($type->name) : get_string('nosubmissiontype', 'mod_confprogram');
+} else if (submissions_api::get_submission_types((int) $confsubmissionscm->id)) {
+    $typename = get_string('nosubmissiontype', 'mod_confprogram');
+}
+if ($typename !== null) {
+    echo html_writer::tag('p', html_writer::tag('strong', get_string('submissiontype', 'mod_confsubmissions') . ': ')
+        . $typename);
+}
+
+echo html_writer::tag('div', format_text($submission->abstract, FORMAT_PLAIN), ['class' => 'mb-2']);
+
+// The abstract's length, measured the way the submission form limits it
+// (\mod_confsubmissions\local\limits): half-width words for English/romaji, full-width
+// characters for Japanese. A measure is shown only when the abstract has some of that
+// script, with the call's limit beside it when one is set.
+$limitsettings = $DB->get_record(
+    'confsubmissions',
+    ['id' => $confsubmissionscm->instance],
+    'id, abstractmaxwords, abstractmaxchars',
+    MUST_EXIST
+);
+$lengths = [];
+foreach (
+    [
+        [limits::TYPE_WORDS, (int) $limitsettings->abstractmaxwords, 'abstractwords'],
+        [limits::TYPE_CHARS, (int) $limitsettings->abstractmaxchars, 'abstractchars'],
+    ] as [$measure, $limit, $stringkey]
+) {
+    $count = limits::count((string) $submission->abstract, $measure);
+    if ($count === 0) {
+        continue;
+    }
+    $text = $limit > 0
+        ? get_string($stringkey . 'of', 'mod_confprogram', (object) ['count' => $count, 'limit' => $limit])
+        : get_string($stringkey, 'mod_confprogram', $count);
+    $lengths[] = html_writer::span($text, $limit > 0 && $count > $limit ? 'text-danger' : '');
+}
+if ($lengths) {
+    echo html_writer::tag('p', html_writer::tag('strong', get_string('abstractlength', 'mod_confprogram') . ': ')
+        . implode(' · ', $lengths), ['class' => 'small text-muted mb-3']);
+}
 
 // Every organiser-defined optional field is shown here, regardless of the
 // Display-phase show-in-list/show-in-modal visibility matrix (classes/local/

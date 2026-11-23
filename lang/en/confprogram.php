@@ -22,6 +22,11 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+$string['abstractchars'] = '{$a} full-width characters';
+$string['abstractcharsof'] = '{$a->count} of {$a->limit} full-width characters';
+$string['abstractlength'] = 'Abstract length';
+$string['abstractwords'] = '{$a} words';
+$string['abstractwordsof'] = '{$a->count} of {$a->limit} words';
 $string['acceptedsubmissions'] = 'Accepted submissions';
 $string['alldays'] = 'All days';
 $string['alldecisionstatuses'] = 'All statuses';
@@ -125,6 +130,7 @@ $string['noreviewersassigned'] = 'No reviewers assigned yet.';
 $string['noreviewscompleted'] = 'You have not completed any reviews yet.';
 $string['noreviewspending'] = 'You have no pending reviews.';
 $string['noreviewsyet'] = 'No completed reviews yet for this round.';
+$string['nosubmissiontype'] = 'No presentation type';
 $string['notifbody'] = 'Message';
 $string['notifbody_help'] = 'The notification email body for this decision type, sent to every speaker via Moodle\'s own notification system (and by email by default). Use [[fullname]], [[submissiontitle]], [[coursename]], [[decision]] (Accept, Reject, Waitlist, or Resubmit). Accept/Reject/Waitlist notifications are deferred until this instance switches to Display phase if the decision was made during Review phase; Resubmit notifications (which may also use [[feedbackurl]]) send immediately instead, regardless of phase.';
 $string['notifdefaultbody:accept'] = '<p>Hello [[fullname]],</p><p>Congratulations &mdash; your submission "[[submissiontitle]]" for [[coursename]] has been <strong>accepted</strong>.</p><p>Please claim your presenter ticket promptly to confirm your place at the conference.</p>';

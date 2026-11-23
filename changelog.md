@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- The review page shows the submission's presentation type (workshop, lightning talk...), in a
+  blind review too, when the call has presentation types.
+- Under the abstract, the review page shows its length as the submission form measures it
+  (`\mod_confsubmissions\local\limits`): words for half-width (English/romaji) text, full-width
+  characters for Japanese, each only when the abstract has some, with the call's limit beside it
+  when one is set ("Abstract length: 230 of 250 words"), in red when over the limit.
+
 ### Fixed
 
 - A bilingual rubric written with the multilang filter's `<span lang="..." class="multilang">`
