@@ -19,6 +19,8 @@ The activity runs in two phases, switched from edit mode.
 
 - **Assign reviewers** to each submission individually, or a whole reviewer group at once in group-review mode.
 - **Review with a rubric** built on Moodle's advanced grading API, optionally **blind** (reviewer and author identities hidden from each other, including any organiser-defined submission field that might identify the author). By default only the *Manager* role bypasses blind review; grant `mod/confprogram:viewidentity` explicitly to any other role that should see identities while reviewing.
+- The review page shows each submission's **presentation type** (also in blind review) and the **abstract's length**: words for English, full-width characters for Japanese, against the call's limits when set.
+- **Multilang rubrics** — rubric text written for the multilang filter shows in the reader's language on the review form, in feedback and on the rubric editor and preview pages, with a *multilang* button showing the source.
 - **Mark keynotes/panels *unvetted*** to exclude them from review; accept them directly in the Decision report's *Unvetted submissions* section.
 - **Record decisions** — Accept / Reject / Resubmit / Waitlist — on the filterable **Decision report**, one at a time or in bulk. *Resubmit* reopens the submission for a fresh round with reviewer feedback visible; a **Start a new round** link jumps straight to bulk re-assignment.
 - The Decision report links into `mod_confsubmissions`' editor so a viewer with *Edit any submission* can fix a submission's details without leaving the workflow.

@@ -1,16 +1,15 @@
 # Changes
 
-## v0.1.4
+## v0.1.5
 
-- Unvetted submissions (such as invited keynotes and panels) can now be given a decision. The
-  Decision report lists them in their own "Unvetted submissions" section, where an organiser
-  records a decision for each one, typically Accept, so that they appear in the programme list
-  and in Conference Scheduler. Resubmit is not offered for them.
-- The review page shows checkbox and date field values as Yes/No and as dates, instead of the
-  raw stored values.
-- The reviewer assignment page no longer shows an empty first column when group review is off.
-- The rubric on the review form is labelled "Scoring" instead of repeating the "Review" heading.
-- Clearer wording for the "Start a new round" link, and the "Default max reviews per reviewer"
-  help no longer mentions a per-reviewer override that cannot be set.
+- A bilingual rubric written with the multilang filter (`<span lang="..." class="multilang">` or
+  `{mlang}`) now shows in the reader's language on the review form and in reviewer feedback,
+  instead of showing the raw tags.
+- On the rubric editor and preview pages, the same rubric text shows as reviewers see it, with a
+  "multilang" button that opens the saved source, one row per language. Editing is unchanged.
+- The review page shows the submission's presentation type (also in blind review).
+- Under the abstract, the review page shows its length: words for English text and full-width
+  characters for Japanese, each only when present, with the call's limit beside it when one is
+  set, in red when over the limit.
 
 See `changelog.md` for the full development history.
