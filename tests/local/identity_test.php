@@ -125,4 +125,28 @@ final class identity_test extends advanced_testcase {
 
         $this->assertFalse(identity::can_view_identity($context));
     }
+
+    /**
+     * The decision report shows the speakers in a blind review unless the option to hide
+     * them is on, and that option still lets a viewidentity holder see them.
+     */
+    public function test_can_view_decision_authors(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$course, $context] = $this->create_confprogram(true);
+        $user = $this->getDataGenerator()->create_user();
+        $manager = $this->getDataGenerator()->create_and_enrol($course, 'manager');
+        $confprogram = $DB->get_record('confprogram', ['course' => $course->id], '*', MUST_EXIST);
+
+        $this->assertTrue(identity::can_view_decision_authors($confprogram, $context, (int) $user->id));
+
+        $confprogram->hidedecisionauthors = 1;
+        $this->assertFalse(identity::can_view_decision_authors($confprogram, $context, (int) $user->id));
+        $this->assertTrue(identity::can_view_decision_authors($confprogram, $context, (int) $manager->id));
+
+        // The option belongs to blind review: without it, the names show.
+        $DB->set_field('confprogram', 'blindreview', 0, ['id' => $confprogram->id]);
+        $this->assertTrue(identity::can_view_decision_authors($confprogram, $context, (int) $user->id));
+    }
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/confprogram/db" VERSION="2026070903" COMMENT="XMLDB file for Moodle mod/confprogram"
+<XMLDB PATH="mod/confprogram/db" VERSION="2026112500" COMMENT="XMLDB file for Moodle mod/confprogram"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -13,6 +13,7 @@
         <FIELD NAME="confsubmissionscmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Course-module id of the mod_confsubmissions instance this program vets"/>
         <FIELD NAME="phase" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="review" COMMENT="review or display"/>
         <FIELD NAME="blindreview" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether submitter/reviewer identities are hidden from each other during review"/>
+        <FIELD NAME="hidedecisionauthors" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="With blind review on, whether the decision report hides the speakers' names from users without mod/confprogram:viewidentity"/>
         <FIELD NAME="groupreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Whether reviewers are assigned as members of reviewer groups rather than individually"/>
         <FIELD NAME="defaultmaxreviews" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Default per-reviewer cap on assigned reviews in group-review mode; 0 means unlimited"/>
         <FIELD NAME="notificationsenabled" TYPE="int" LENGTH="1" NOTNULL="true" SEQUENCE="false" DEFAULT="0" COMMENT="Master switch (user request, 2026-07-06): when 0, this instance's notifier never sends the decision notification, regardless of the template configured. Defaults to 0 (disabled) as of 2026-07-09 -- an organiser must explicitly opt in per instance; this default only applies to newly-created instances, existing instances' stored values are untouched by the upgrade step that changed it"/>

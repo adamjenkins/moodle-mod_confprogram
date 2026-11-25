@@ -50,7 +50,7 @@ class backup_confprogram_activity_structure_step extends backup_activity_structu
 
         $confprogram = new backup_nested_element('confprogram', ['id'], [
             'name', 'intro', 'introformat', 'confsubmissionscmid', 'phase',
-            'blindreview', 'groupreviewmode', 'defaultmaxreviews', 'notificationsenabled',
+            'blindreview', 'hidedecisionauthors', 'groupreviewmode', 'defaultmaxreviews', 'notificationsenabled',
             'timecreated', 'timemodified',
         ]);
 

@@ -333,5 +333,25 @@ function xmldb_confprogram_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026071000, 'confprogram');
     }
 
+    if ($oldversion < 2026112500) {
+        // Option to hide the speakers' names in the decision report during blind review.
+        $table = new xmldb_table('confprogram');
+        $field = new xmldb_field(
+            'hidedecisionauthors',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'blindreview'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026112500, 'confprogram');
+    }
+
     return true;
 }

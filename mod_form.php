@@ -104,6 +104,12 @@ class mod_confprogram_mod_form extends moodleform_mod {
         $mform->addHelpButton('blindreview', 'blindreview', 'mod_confprogram');
         $mform->setDefault('blindreview', 0);
 
+        $mform->addElement('advcheckbox', 'hidedecisionauthors', get_string('hidedecisionauthors', 'mod_confprogram'));
+        $mform->setType('hidedecisionauthors', PARAM_BOOL);
+        $mform->addHelpButton('hidedecisionauthors', 'hidedecisionauthors', 'mod_confprogram');
+        $mform->setDefault('hidedecisionauthors', 0);
+        $mform->hideIf('hidedecisionauthors', 'blindreview', 'notchecked');
+
         $mform->addElement('advcheckbox', 'groupreviewmode', get_string('groupreviewmode', 'mod_confprogram'));
         $mform->setType('groupreviewmode', PARAM_BOOL);
         $mform->addHelpButton('groupreviewmode', 'groupreviewmode', 'mod_confprogram');

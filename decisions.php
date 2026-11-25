@@ -223,6 +223,37 @@ if (!$decorated && !$decoratedunvetted) {
 // :viewidentity (e.g. a coordinator role that decides but should still see reviews blind).
 $canviewidentity = identity::can_view_identity($context);
 
+// Who speaks and which presentation type, shown after the title. Names are not even loaded
+// for a user who may not see them.
+$listedids = array_map(
+    static fn(\stdClass $row): int => (int) $row->submission->id,
+    array_merge(array_values($decorated), array_values($decoratedunvetted))
+);
+$showauthors = identity::can_view_decision_authors($confprogram, $context);
+$speakernames = $showauthors ? submissions_api::get_speaker_display_names($listedids) : [];
+$typenames = array_map(
+    static fn(\stdClass $type): string => format_string($type->name),
+    submissions_api::get_submission_types($confsubmissionscm->id)
+);
+$extrahead = [];
+if ($showauthors) {
+    $extrahead[] = get_string('speakers', 'mod_confsubmissions');
+}
+if ($typenames) {
+    $extrahead[] = get_string('submissiontype', 'mod_confsubmissions');
+}
+$extracellsfor = static function (\stdClass $submission) use ($showauthors, $speakernames, $typenames): array {
+    $cells = [];
+    if ($showauthors) {
+        $cells[] = s(implode(', ', $speakernames[(int) $submission->id] ?? [])) ?: '-';
+    }
+    if ($typenames) {
+        $cells[] = $typenames[(int) ($submission->submissiontypeid ?? 0)]
+            ?? get_string('nosubmissiontype', 'mod_confprogram');
+    }
+    return $cells;
+};
+
 $decisionoptions = [];
 foreach ($validdecisions as $decision) {
     $decisionoptions[$decision] = get_string('decision_' . $decision, 'mod_confprogram');
@@ -258,12 +289,21 @@ $decisioncontrolfor = static function (\stdClass $submission, array $options): s
         'class' => 'btn btn-primary btn-sm',
     ]);
 };
+// The submission's own page names its speakers, so no link where they are hidden here.
+$canviewsubmissions = $showauthors && has_capability('mod/confsubmissions:viewall', $confsubmissionscontext);
 $titlecellfor = static function (\stdClass $submission) use (
+    $canviewsubmissions,
     $caneditsubmissions,
     $confsubmissionscm,
     $decisionsreturnurl
 ): string {
     $titlecell = format_string($submission->title);
+    if ($canviewsubmissions) {
+        $titlecell = html_writer::link(new moodle_url('/mod/confsubmissions/submission.php', [
+            'id'           => $confsubmissionscm->id,
+            'submissionid' => $submission->id,
+        ]), $titlecell);
+    }
     if ($caneditsubmissions) {
         $editurl = new moodle_url('/mod/confsubmissions/edit.php', [
             'id'           => $confsubmissionscm->id,
@@ -312,6 +352,7 @@ if ($decorated) {
             'aria-label' => get_string('selectall', 'mod_confprogram'),
         ]),
         get_string('title', 'mod_confsubmissions'),
+        ...$extrahead,
         get_string('track', 'mod_confsubmissions'),
         get_string('round', 'mod_confprogram'),
         get_string('lastdecisioncolumn', 'mod_confprogram'),
@@ -347,6 +388,7 @@ if ($decorated) {
                 'aria-label' => get_string('selectsubmission', 'mod_confprogram', format_string($submission->title)),
             ]),
             $titlecellfor($submission),
+            ...$extracellsfor($submission),
             field_formatter::get_track_pill_html($submission),
             $row->round,
             $decisioncellfor($row->latestdecision),
@@ -380,6 +422,7 @@ if ($decoratedunvetted) {
     $unvettedtable = new html_table();
     $unvettedtable->head = [
         get_string('title', 'mod_confsubmissions'),
+        ...$extrahead,
         get_string('track', 'mod_confsubmissions'),
         get_string('lastdecisioncolumn', 'mod_confprogram'),
         get_string('makedecision', 'mod_confprogram'),
@@ -388,6 +431,7 @@ if ($decoratedunvetted) {
     foreach ($decoratedunvetted as $row) {
         $unvettedtable->data[] = [
             $titlecellfor($row->submission),
+            ...$extracellsfor($row->submission),
             field_formatter::get_track_pill_html($row->submission),
             $decisioncellfor($row->latestdecision),
             $decisioncontrolfor($row->submission, $unvetteddecisionoptions),

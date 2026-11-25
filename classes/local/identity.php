@@ -60,4 +60,22 @@ class identity {
 
         return !$blindreview;
     }
+
+    /**
+     * Whether the given user may see the speakers' names in the decision report. Unlike the
+     * review screens, the report shows them in a blind review too (the reviews are over),
+     * unless the instance's hidedecisionauthors option is on.
+     *
+     * @param \stdClass $confprogram The confprogram record
+     * @param \context $context Its course-module context
+     * @param int|null $userid The user to check; defaults to the current user
+     * @return bool
+     */
+    public static function can_view_decision_authors(
+        \stdClass $confprogram,
+        \context $context,
+        ?int $userid = null
+    ): bool {
+        return empty($confprogram->hidedecisionauthors) || self::can_view_identity($context, $userid);
+    }
 }

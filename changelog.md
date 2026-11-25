@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- The decision report lists each submission's speakers and presentation type after its title, and
+  the title links to the submission's page (for holders of `mod/confsubmissions:viewall` who may
+  see the speakers).
+- "Hide authors in the decision report", a blind review setting, off by default: hides the speakers
+  there from users without `mod/confprogram:viewidentity`.
+
 ## [0.1.5] - 2026-11-23
 
 ### Added
